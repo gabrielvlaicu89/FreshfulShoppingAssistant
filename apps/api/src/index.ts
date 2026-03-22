@@ -7,10 +7,12 @@ export { ClaudeUpstreamError, ClaudeUsageLimitError } from "./ai/errors.js";
 export { parseStructuredResponse, type StructuredParseResult } from "./ai/parser.js";
 export {
   assembleMealPlanPrompt,
+  assembleMealPlanRefinementPrompt,
   assembleOnboardingReplyPrompt,
   assembleProfileExtractionPrompt,
   type ClaudePromptLimits,
   type MealPlanPromptInput,
+  type MealPlanRefinementPromptInput,
   type OnboardingReplyPromptInput,
   type ProfileExtractionPromptInput,
   type PromptEnvelope
@@ -32,6 +34,8 @@ export {
   type CreateClaudeServiceOptions,
   type MealPlanGenerationRequest,
   type MealPlanGenerationResponse,
+  type MealPlanRefinementRequest,
+  type MealPlanRefinementResponse,
   type OnboardingReplyRequest,
   type OnboardingReplyResponse,
   type ProfileExtractionRequest,
@@ -93,12 +97,22 @@ export {
   createPlanRequestSchema,
   createPlanResponseSchema,
   generatedMealPlanSchema,
+  planDetailResponseSchema,
+  planParamsSchema,
+  planRevisionSchema,
+  refinePlanRequestSchema,
   type CreatePlanRequest,
   type CreatePlanResponse,
-  type GeneratedMealPlan
+  type GeneratedMealPlan,
+  type PlanDetailResponse,
+  type PlanParams,
+  type PlanRevision,
+  type RefinePlanRequest
 } from "./planner/contracts.js";
 export {
   createInvalidGeneratedPlanError,
+  createInvalidRefinedPlanError,
+  createPlannerPlanNotFoundError,
   createPlannerProfileRequiredError,
   createPlannerServiceUnavailableError,
   createPlannerUpstreamError,
@@ -107,6 +121,7 @@ export {
 export {
   createPlannerRepository,
   type CreatePlannerRepositoryOptions,
+  type PersistedPlanDetail,
   type PersistedPlanResult,
   type PlannerDatabase,
   type PlannerRepository

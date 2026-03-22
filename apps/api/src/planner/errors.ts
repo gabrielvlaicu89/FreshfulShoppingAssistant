@@ -16,6 +16,14 @@ export function createPlannerProfileRequiredError(): ApiHttpError {
   });
 }
 
+export function createPlannerPlanNotFoundError(): ApiHttpError {
+  return new ApiHttpError({
+    code: "planner.plan_not_found",
+    message: "The requested meal plan was not found for the authenticated user.",
+    statusCode: 404
+  });
+}
+
 export function createPlannerUsageLimitError(message: string, cause?: unknown): ApiHttpError {
   return new ApiHttpError({
     code: "ai.usage_limit_exceeded",
@@ -46,6 +54,23 @@ export function createInvalidGeneratedPlanError(
   return new ApiHttpError({
     code: "planner.invalid_generated_plan",
     message: "The generated meal plan response was invalid.",
+    statusCode: 502,
+    details: {
+      reason,
+      ...details
+    },
+    cause
+  });
+}
+
+export function createInvalidRefinedPlanError(
+  reason: string,
+  details: Record<string, unknown> = {},
+  cause?: unknown
+): ApiHttpError {
+  return new ApiHttpError({
+    code: "planner.invalid_refined_plan",
+    message: "The refined meal plan response was invalid.",
     statusCode: 502,
     details: {
       reason,

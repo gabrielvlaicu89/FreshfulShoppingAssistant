@@ -1,6 +1,6 @@
 import type { OnboardingChatMessage } from "@freshful/contracts";
 
-import type { CreatePlanRequest } from "../planner/contracts.js";
+import type { CreatePlanRequest, GeneratedMealPlan } from "../planner/contracts.js";
 
 export interface ClaudePromptLimits {
   maxTranscriptMessages: number;
@@ -47,6 +47,12 @@ export interface MealPlanPromptInput {
     cookingSkill: string;
   };
   options: CreatePlanRequest;
+}
+
+export interface MealPlanRefinementPromptInput {
+  profile: MealPlanPromptInput["profile"];
+  currentPlan: GeneratedMealPlan;
+  refinementPrompt: string;
 }
 
 const onboardingFieldChecklist = [
@@ -157,6 +163,38 @@ export function assembleMealPlanPrompt(input: MealPlanPromptInput): PromptEnvelo
     `Request options: ${JSON.stringify(input.options)}`,
     `Profile context: ${JSON.stringify(input.profile)}`,
     "Return only the JSON object."
+  ].join("\n\n");
+  const messages = [
+    {
+      role: "user" as const,
+      content: userPrompt
+    }
+  ];
+
+  return {
+    system,
+    messages,
+    promptChars: measurePrompt(system, messages),
+    transcriptMessageCount: 0
+  };
+}
+
+export function assembleMealPlanRefinementPrompt(input: MealPlanRefinementPromptInput): PromptEnvelope {
+  const system = [
+    "You refine structured meal plans for the Freshful Shopping Assistant.",
+    "Return valid JSON only with no markdown fences or explanatory prose.",
+    "The JSON must match this exact shape: {\"title\":string,\"durationDays\":1..7,\"recipes\":[{\"id\":string,\"title\":string,\"ingredients\":[{\"name\":string,\"quantity\":number,\"unit\":string}],\"instructions\":[string],\"tags\":[string],\"estimatedMacros\":{\"calories\":number,\"proteinGrams\":number,\"carbsGrams\":number,\"fatGrams\":number}}],\"days\":[{\"dayNumber\":1..7,\"meals\":[{\"slot\":\"breakfast|lunch|dinner|snack\",\"recipeId\":string}]}],\"metadata\":{\"tags\":[string],\"estimatedMacros\":{\"calories\":number,\"proteinGrams\":number,\"carbsGrams\":number,\"fatGrams\":number}}}.",
+    "Preserve the planning horizon, day numbers, and meal slots from the current plan exactly.",
+    "Apply the user's refinement request while respecting dietary restrictions, allergies, health flags, prep-time limits, cooking skill, and stated preferences.",
+    "Update recipes, ingredient quantities, and macro estimates coherently when the refinement changes them.",
+    "Do not include ids or fields outside the required JSON shape except recipe ids already needed by the schema."
+  ].join(" ");
+  const userPrompt = [
+    "Refine the existing meal plan according to the user's request.",
+    `User refinement request: ${input.refinementPrompt}`,
+    `Profile context: ${JSON.stringify(input.profile)}`,
+    `Current meal plan: ${JSON.stringify(input.currentPlan)}`,
+    "Return only the refined JSON object."
   ].join("\n\n");
   const messages = [
     {

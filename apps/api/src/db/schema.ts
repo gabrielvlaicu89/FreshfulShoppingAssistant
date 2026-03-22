@@ -125,6 +125,7 @@ export const mealPlanTemplates = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    parentTemplateId: text("parent_template_id"),
     title: text("title").notNull(),
     durationDays: integer("duration_days").notNull(),
     recipes: jsonb("recipes").$type<MealPlanTemplate["recipes"]>().notNull(),
@@ -134,6 +135,12 @@ export const mealPlanTemplates = pgTable(
   },
   (table) => ({
     userOwnedTemplateUniqueConstraint: unique("meal_plan_templates_user_id_id_key").on(table.userId, table.id),
+    parentTemplateOwnerForeignKey: foreignKey({
+      columns: [table.userId, table.parentTemplateId],
+      foreignColumns: [table.userId, table.id],
+      name: "meal_plan_templates_user_id_parent_template_owner_fk"
+    }),
+    parentTemplateIdIndex: index("meal_plan_templates_parent_template_id_idx").on(table.parentTemplateId),
     userIdIndex: index("meal_plan_templates_user_id_idx").on(table.userId)
   })
 );
@@ -288,6 +295,14 @@ export const mealPlanTemplatesRelations = relations(mealPlanTemplates, ({ many, 
   user: one(users, {
     fields: [mealPlanTemplates.userId],
     references: [users.id]
+  }),
+  parentTemplate: one(mealPlanTemplates, {
+    fields: [mealPlanTemplates.parentTemplateId],
+    references: [mealPlanTemplates.id],
+    relationName: "meal_plan_template_revision_lineage"
+  }),
+  childTemplates: many(mealPlanTemplates, {
+    relationName: "meal_plan_template_revision_lineage"
   }),
   instances: many(mealPlanInstances),
   shoppingLists: many(shoppingLists)

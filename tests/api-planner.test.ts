@@ -145,6 +145,8 @@ async function seedProfile(database: Awaited<ReturnType<typeof createMigratedTes
 }
 
 function createMealPlanAiDouble(result: Awaited<ReturnType<ClaudeService["createMealPlan"]>>): ClaudeService {
+  const refinementResult = result;
+
   return {
     async createOnboardingReply() {
       return {
@@ -175,6 +177,50 @@ function createMealPlanAiDouble(result: Awaited<ReturnType<ClaudeService["create
     },
     async createMealPlan() {
       return result;
+    },
+    async refineMealPlan() {
+      return refinementResult;
+    }
+  };
+}
+
+function createPlannerAiDouble(options: {
+  createMealPlanResult: Awaited<ReturnType<ClaudeService["createMealPlan"]>>;
+  refineMealPlanResult?: Awaited<ReturnType<ClaudeService["refineMealPlan"]>>;
+}): ClaudeService {
+  return {
+    async createOnboardingReply() {
+      return {
+        assistantMessage: "unused",
+        usage: {
+          model: "claude-3-5-haiku-latest",
+          modelTier: "haiku",
+          routeReason: "test",
+          inputTokens: 1,
+          outputTokens: 1
+        }
+      };
+    },
+    async extractProfile() {
+      return {
+        profile: null,
+        rawText: "unused",
+        missingFields: [],
+        parseFailureReason: "missing_json",
+        usage: {
+          model: "claude-3-7-sonnet-latest",
+          modelTier: "sonnet",
+          routeReason: "test",
+          inputTokens: 1,
+          outputTokens: 1
+        }
+      };
+    },
+    async createMealPlan() {
+      return options.createMealPlanResult;
+    },
+    async refineMealPlan() {
+      return options.refineMealPlanResult ?? options.createMealPlanResult;
     }
   };
 }
@@ -253,6 +299,77 @@ function createGeneratedPlan(durationDays: number) {
         proteinGrams: durationDays * 47,
         carbsGrams: durationDays * 124,
         fatGrams: durationDays * 33
+      }
+    }
+  };
+}
+
+function createRefinedPlan(durationDays: number) {
+  const plan = createGeneratedPlan(durationDays);
+
+  return {
+    ...plan,
+    title: `${durationDays} Day Family Vegetarian Plan - Refined`,
+    recipes: [
+      {
+        ...plan.recipes[0],
+        title: "Berry Protein Oat Bowl",
+        estimatedMacros: {
+          calories: 390,
+          proteinGrams: 24,
+          carbsGrams: 41,
+          fatGrams: 11
+        }
+      },
+      {
+        ...plan.recipes[1],
+        id: "recipe-dinner-refined",
+        title: "Tofu Lentil Tomato Skillet",
+        ingredients: [
+          {
+            name: "tofu",
+            quantity: 220,
+            unit: "g"
+          },
+          {
+            name: "lentils",
+            quantity: 180,
+            unit: "g"
+          },
+          {
+            name: "tomatoes",
+            quantity: 350,
+            unit: "g"
+          }
+        ],
+        estimatedMacros: {
+          calories: 540,
+          proteinGrams: 35,
+          carbsGrams: 46,
+          fatGrams: 18
+        }
+      }
+    ],
+    days: Array.from({ length: durationDays }, (_, index) => ({
+      dayNumber: index + 1,
+      meals: [
+        {
+          slot: "breakfast" as const,
+          recipeId: "recipe-breakfast"
+        },
+        {
+          slot: "dinner" as const,
+          recipeId: "recipe-dinner-refined"
+        }
+      ]
+    })),
+    metadata: {
+      tags: ["family", "vegetarian", "refined"],
+      estimatedMacros: {
+        calories: durationDays * 930,
+        proteinGrams: durationDays * 59,
+        carbsGrams: durationDays * 87,
+        fatGrams: durationDays * 29
       }
     }
   };
@@ -732,4 +849,659 @@ test("POST /plans rejects AI-generated plans whose day numbers do not match 1 th
     .where(eq(databaseTables.mealPlanTemplates.userId, user.id));
 
   assert.equal(storedTemplates.length, 0);
+});
+
+test("GET /plans/:id returns the authenticated user's plan detail and hides other users' plans", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-22T20:00:00.000Z");
+  const owner = createUser("planner-get-owner", fixedNow);
+  const otherUser = createUser("planner-get-other", fixedNow);
+  const ownerSession = await createUserSession(database.db as AuthDatabase, owner, fixedNow);
+  const otherSession = await createUserSession(database.db as AuthDatabase, otherUser, fixedNow);
+  await seedProfile(database.db, owner.id, fixedNow.toISOString());
+  await seedProfile(database.db, otherUser.id, fixedNow.toISOString());
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: createPlannerAiDouble({
+          createMealPlanResult: {
+            plan: createGeneratedPlan(3),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 200,
+              outputTokens: 300
+            }
+          }
+        })
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createHouseholdProfileRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow,
+        createId: (() => {
+          let sequence = 200;
+
+          return () => `planner-id-${++sequence}`;
+        })()
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/plans",
+    headers: {
+      authorization: `Bearer ${ownerSession.accessToken}`
+    },
+    payload: {
+      durationDays: 3,
+      mealSlots: ["breakfast", "dinner"],
+      startDate: "2026-03-25"
+    }
+  });
+
+  assert.equal(createResponse.statusCode, 200);
+
+  const planId = createResponse.json().template.id;
+  const getResponse = await app.inject({
+    method: "GET",
+    url: `/plans/${planId}`,
+    headers: {
+      authorization: `Bearer ${ownerSession.accessToken}`
+    }
+  });
+
+  assert.equal(getResponse.statusCode, 200);
+  assert.equal(getResponse.json().template.id, planId);
+  assert.equal(getResponse.json().instance.startDate, "2026-03-25");
+  assert.equal(getResponse.json().revisionHistory.length, 1);
+  assert.equal(getResponse.json().revisionHistory[0].templateId, planId);
+  assert.equal(getResponse.json().revisionHistory[0].parentTemplateId, null);
+  assert.equal(getResponse.json().revisionHistory[0].title, "3 Day Family Vegetarian Plan");
+  assert.ok(typeof getResponse.json().revisionHistory[0].createdAt === "string");
+  assert.ok(getResponse.json().revisionHistory[0].createdAt.length > 0);
+  assert.equal(getResponse.json().revisionHistory[0].instanceId, getResponse.json().instance.id);
+  assert.equal(getResponse.json().revisionHistory[0].startDate, "2026-03-25");
+  assert.equal(getResponse.json().revisionHistory[0].endDate, "2026-03-27");
+
+  const wrongOwnerResponse = await app.inject({
+    method: "GET",
+    url: `/plans/${planId}`,
+    headers: {
+      authorization: `Bearer ${otherSession.accessToken}`
+    }
+  });
+
+  assert.equal(wrongOwnerResponse.statusCode, 404);
+  assert.equal(wrongOwnerResponse.json().code, "planner.plan_not_found");
+});
+
+test("POST /plans/:id/refine creates a new revision, preserves calendar binding, and keeps lineage retrievable", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-22T20:10:00.000Z");
+  const user = createUser("planner-refine-user", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  await seedProfile(database.db, user.id, fixedNow.toISOString());
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: createPlannerAiDouble({
+          createMealPlanResult: {
+            plan: createGeneratedPlan(3),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 200,
+              outputTokens: 300
+            }
+          },
+          refineMealPlanResult: {
+            plan: createRefinedPlan(3),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 220,
+              outputTokens: 340
+            }
+          }
+        })
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createHouseholdProfileRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow,
+        createId: (() => {
+          let sequence = 300;
+
+          return () => `planner-id-${++sequence}`;
+        })()
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/plans",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    },
+    payload: {
+      durationDays: 3,
+      mealSlots: ["breakfast", "dinner"],
+      startDate: "2026-03-26"
+    }
+  });
+
+  const sourcePlanId = createResponse.json().template.id;
+  const refineResponse = await app.inject({
+    method: "POST",
+    url: `/plans/${sourcePlanId}/refine`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    },
+    payload: {
+      prompt: "Swap dinner to a tofu-based recipe and lower the total carbs."
+    }
+  });
+
+  assert.equal(refineResponse.statusCode, 200);
+  assert.equal(refineResponse.json().template.title, "3 Day Family Vegetarian Plan - Refined");
+  assert.notEqual(refineResponse.json().template.id, sourcePlanId);
+  assert.equal(refineResponse.json().instance.startDate, "2026-03-26");
+  assert.equal(refineResponse.json().instance.endDate, "2026-03-28");
+  assert.deepEqual(
+    refineResponse.json().revisionHistory.map((revision: { templateId: string; parentTemplateId: string | null }) => ({
+      templateId: revision.templateId,
+      parentTemplateId: revision.parentTemplateId
+    })),
+    [
+      {
+        templateId: sourcePlanId,
+        parentTemplateId: null
+      },
+      {
+        templateId: refineResponse.json().template.id,
+        parentTemplateId: sourcePlanId
+      }
+    ]
+  );
+
+  const getRefinedResponse = await app.inject({
+    method: "GET",
+    url: `/plans/${refineResponse.json().template.id}`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    }
+  });
+
+  assert.equal(getRefinedResponse.statusCode, 200);
+  assert.equal(getRefinedResponse.json().revisionHistory.length, 2);
+  assert.equal(getRefinedResponse.json().revisionHistory[1].parentTemplateId, sourcePlanId);
+  assert.equal(getRefinedResponse.json().instance.startDate, "2026-03-26");
+
+  const storedTemplates = await database.db
+    .select()
+    .from(databaseTables.mealPlanTemplates)
+    .where(eq(databaseTables.mealPlanTemplates.userId, user.id));
+  const storedInstances = await database.db
+    .select()
+    .from(databaseTables.mealPlanInstances)
+    .where(eq(databaseTables.mealPlanInstances.userId, user.id));
+
+  assert.equal(storedTemplates.length, 2);
+  assert.equal(storedInstances.length, 2);
+  assert.equal(
+    storedTemplates.find((template) => template.id === refineResponse.json().template.id)?.parentTemplateId,
+    sourcePlanId
+  );
+});
+
+test("POST /plans/:id/refine sanitizes carried-forward instance overrides against the refined template", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-22T20:15:00.000Z");
+  const user = createUser("planner-refine-overrides", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  await seedProfile(database.db, user.id, fixedNow.toISOString());
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: createPlannerAiDouble({
+          createMealPlanResult: {
+            plan: createGeneratedPlan(3),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 200,
+              outputTokens: 300
+            }
+          },
+          refineMealPlanResult: {
+            plan: createRefinedPlan(3),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 220,
+              outputTokens: 340
+            }
+          }
+        })
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createHouseholdProfileRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow,
+        createId: (() => {
+          let sequence = 350;
+
+          return () => `planner-id-${++sequence}`;
+        })()
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/plans",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    },
+    payload: {
+      durationDays: 3,
+      mealSlots: ["breakfast", "dinner"],
+      startDate: "2026-03-26"
+    }
+  });
+
+  assert.equal(createResponse.statusCode, 200);
+
+  const sourcePlanId = createResponse.json().template.id;
+  const sourceInstanceId = createResponse.json().instance.id;
+  const sourceOverrides = [
+    {
+      dayNumber: 1,
+      slot: "dinner",
+      recipeId: "recipe-dinner",
+      notes: "Prefer extra spice."
+    },
+    {
+      dayNumber: 1,
+      slot: "breakfast",
+      notes: "Prep the night before."
+    },
+    {
+      dayNumber: 2,
+      slot: "breakfast",
+      recipeId: "recipe-breakfast",
+      notes: "Double the yogurt."
+    },
+    {
+      dayNumber: 3,
+      slot: "dinner",
+      recipeId: "recipe-dinner"
+    }
+  ];
+
+  await database.db
+    .update(databaseTables.mealPlanInstances)
+    .set({
+      overrides: sourceOverrides
+    })
+    .where(eq(databaseTables.mealPlanInstances.id, sourceInstanceId));
+
+  const refineResponse = await app.inject({
+    method: "POST",
+    url: `/plans/${sourcePlanId}/refine`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    },
+    payload: {
+      prompt: "Swap dinner to a tofu-based recipe and lower the total carbs."
+    }
+  });
+
+  assert.equal(refineResponse.statusCode, 200);
+  assert.deepEqual(refineResponse.json().instance.overrides, [
+    {
+      dayNumber: 1,
+      slot: "dinner",
+      notes: "Prefer extra spice."
+    },
+    {
+      dayNumber: 1,
+      slot: "breakfast",
+      notes: "Prep the night before."
+    },
+    {
+      dayNumber: 2,
+      slot: "breakfast",
+      recipeId: "recipe-breakfast",
+      notes: "Double the yogurt."
+    }
+  ]);
+
+  const storedRefinedInstance = await database.db.query.mealPlanInstances.findFirst({
+    where: eq(databaseTables.mealPlanInstances.templateId, refineResponse.json().template.id)
+  });
+
+  assert.deepEqual(storedRefinedInstance?.overrides, [
+    {
+      dayNumber: 1,
+      slot: "dinner",
+      notes: "Prefer extra spice."
+    },
+    {
+      dayNumber: 1,
+      slot: "breakfast",
+      notes: "Prep the night before."
+    },
+    {
+      dayNumber: 2,
+      slot: "breakfast",
+      recipeId: "recipe-breakfast",
+      notes: "Double the yogurt."
+    }
+  ]);
+});
+
+test("POST /plans/:id/refine rejects missing sessions and wrong-owner plan access", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-22T20:20:00.000Z");
+  const owner = createUser("planner-refine-owner", fixedNow);
+  const otherUser = createUser("planner-refine-other", fixedNow);
+  const ownerSession = await createUserSession(database.db as AuthDatabase, owner, fixedNow);
+  const otherSession = await createUserSession(database.db as AuthDatabase, otherUser, fixedNow);
+  await seedProfile(database.db, owner.id, fixedNow.toISOString());
+  await seedProfile(database.db, otherUser.id, fixedNow.toISOString());
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: createPlannerAiDouble({
+          createMealPlanResult: {
+            plan: createGeneratedPlan(2),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 200,
+              outputTokens: 300
+            }
+          },
+          refineMealPlanResult: {
+            plan: createRefinedPlan(2),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 210,
+              outputTokens: 320
+            }
+          }
+        })
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createHouseholdProfileRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow,
+        createId: (() => {
+          let sequence = 400;
+
+          return () => `planner-id-${++sequence}`;
+        })()
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/plans",
+    headers: {
+      authorization: `Bearer ${ownerSession.accessToken}`
+    },
+    payload: {
+      durationDays: 2,
+      mealSlots: ["breakfast", "dinner"]
+    }
+  });
+
+  const sourcePlanId = createResponse.json().template.id;
+
+  const unauthorizedResponse = await app.inject({
+    method: "POST",
+    url: `/plans/${sourcePlanId}/refine`,
+    payload: {
+      prompt: "Swap the dinner recipe."
+    }
+  });
+
+  assert.equal(unauthorizedResponse.statusCode, 401);
+  assert.equal(unauthorizedResponse.json().code, "auth.missing_app_session");
+
+  const wrongOwnerResponse = await app.inject({
+    method: "POST",
+    url: `/plans/${sourcePlanId}/refine`,
+    headers: {
+      authorization: `Bearer ${otherSession.accessToken}`
+    },
+    payload: {
+      prompt: "Swap the dinner recipe."
+    }
+  });
+
+  assert.equal(wrongOwnerResponse.statusCode, 404);
+  assert.equal(wrongOwnerResponse.json().code, "planner.plan_not_found");
+});
+
+test("POST /plans/:id/refine does not persist a new revision when the refined AI output is invalid", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-22T20:30:00.000Z");
+  const user = createUser("planner-refine-invalid", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  await seedProfile(database.db, user.id, fixedNow.toISOString());
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: createPlannerAiDouble({
+          createMealPlanResult: {
+            plan: createGeneratedPlan(2),
+            rawText: "{}",
+            parseFailureReason: null,
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 200,
+              outputTokens: 300
+            }
+          },
+          refineMealPlanResult: {
+            plan: null,
+            rawText: "I suggest changing dinner, but here is prose instead of JSON.",
+            parseFailureReason: "missing_json",
+            usage: {
+              model: "claude-3-7-sonnet-latest",
+              modelTier: "sonnet",
+              routeReason: "test",
+              inputTokens: 210,
+              outputTokens: 320
+            }
+          }
+        })
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createHouseholdProfileRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow,
+        createId: (() => {
+          let sequence = 500;
+
+          return () => `planner-id-${++sequence}`;
+        })()
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/plans",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    },
+    payload: {
+      durationDays: 2,
+      mealSlots: ["breakfast", "dinner"]
+    }
+  });
+
+  const sourcePlanId = createResponse.json().template.id;
+  const refineResponse = await app.inject({
+    method: "POST",
+    url: `/plans/${sourcePlanId}/refine`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    },
+    payload: {
+      prompt: "Swap dinner to a tofu recipe."
+    }
+  });
+
+  assert.equal(refineResponse.statusCode, 502);
+  assert.equal(refineResponse.json().code, "planner.invalid_refined_plan");
+  assert.equal(refineResponse.json().details.reason, "missing_json");
+
+  const storedTemplates = await database.db
+    .select()
+    .from(databaseTables.mealPlanTemplates)
+    .where(eq(databaseTables.mealPlanTemplates.userId, user.id));
+  const storedInstances = await database.db
+    .select()
+    .from(databaseTables.mealPlanInstances)
+    .where(eq(databaseTables.mealPlanInstances.userId, user.id));
+
+  assert.equal(storedTemplates.length, 1);
+  assert.equal(storedInstances.length, 0);
 });

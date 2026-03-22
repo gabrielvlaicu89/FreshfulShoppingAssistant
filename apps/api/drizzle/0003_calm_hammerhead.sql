@@ -1,0 +1,3 @@
+ALTER TABLE "meal_plan_templates" ADD COLUMN "parent_template_id" text;
+ALTER TABLE "meal_plan_templates" ADD CONSTRAINT "meal_plan_templates_user_id_parent_template_owner_fk" FOREIGN KEY ("user_id","parent_template_id") REFERENCES "public"."meal_plan_templates"("user_id","id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+CREATE INDEX "meal_plan_templates_parent_template_id_idx" ON "meal_plan_templates" USING btree ("parent_template_id");

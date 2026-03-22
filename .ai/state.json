@@ -1,13 +1,18 @@
 {
   "planningStatus": "in-progress",
-  "currentStepId": "P6-S2",
-  "lastCompletedItemId": "P6-S1",
-  "lastReviewedItemId": "P6-S1",
+  "currentStepId": "P6-S3",
+  "lastCompletedItemId": "P6-S2",
+  "lastReviewedItemId": "P6-S2",
   "lastReviewOutcome": "approved",
   "lastCommitMessage": null,
   "lastPushAttempt": null,
   "phaseCommits": [],
   "recentNotes": [
+    {
+      "timestamp": "2026-03-22T21:40:48.721Z",
+      "stepId": "P6-S2",
+      "note": "P6-S2 accepted after planner retrieval and refinement validation and review; apps/api now exposes authenticated GET /plans/:id and POST /plans/:id/refine endpoints with user-scoped access, explicit template revision lineage, Claude-backed refinement, preserved calendar bindings for refined revisions, sanitized carried-forward overrides, and migration-backed regression coverage for ownership, invalid refined output, and revision history."
+    },
     {
       "timestamp": "2026-03-22T21:08:56.027Z",
       "stepId": "P6-S1",
@@ -52,17 +57,12 @@
       "timestamp": "2026-03-22T15:46:46.505Z",
       "stepId": "P3-S2",
       "note": "P3-S2 accepted after auth validation and review; apps/api now verifies Google ID tokens server-side, upserts local users, and issues backend-scoped app JWT session material through POST /auth/google with coverage for valid, invalid, expired, and repeat-sign-in flows."
-    },
-    {
-      "timestamp": "2026-03-22T15:25:50.857Z",
-      "stepId": "P3-S1",
-      "note": "P3-S1 accepted after backend foundation validation and review; apps/api now exposes a Fastify app factory and runtime starter with health checks, structured error handling, logging hooks, config bootstrapping, and placeholder service wiring for auth, AI, planner, and Freshful modules."
     }
   ],
   "lastRun": {
-    "timestamp": "2026-03-22T21:08:56.027Z",
+    "timestamp": "2026-03-22T21:40:48.721Z",
     "agent": "orchestrator",
-    "action": "update-progress:P6-S1",
+    "action": "update-progress:P6-S2",
     "status": "done"
   }
 }

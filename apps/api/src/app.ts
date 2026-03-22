@@ -35,7 +35,13 @@ import {
 import { onboardingChatRequestSchema, onboardingChatResponseSchema } from "./onboarding/contracts.js";
 import { createOnboardingTranscriptRepository, type OnboardingTranscriptRepository } from "./onboarding/repository.js";
 import { createOnboardingService, type OnboardingService } from "./onboarding/service.js";
-import { createPlanRequestSchema, createPlanResponseSchema } from "./planner/contracts.js";
+import {
+  createPlanRequestSchema,
+  createPlanResponseSchema,
+  planDetailResponseSchema,
+  planParamsSchema,
+  refinePlanRequestSchema
+} from "./planner/contracts.js";
 import { createPlannerRepository, type PlannerRepository } from "./planner/repository.js";
 import { createPlannerService, type PlannerService } from "./planner/service.js";
 import { profileResponseSchema, profileUpsertResponseSchema, profileWriteSchema } from "./profile/contracts.js";
@@ -171,7 +177,13 @@ function isOnboardingService(value: unknown): value is OnboardingService {
 }
 
 function isPlannerService(value: unknown): value is PlannerService {
-  return typeof value === "object" && value !== null && "createPlan" in value;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "createPlan" in value &&
+    "getPlan" in value &&
+    "refinePlan" in value
+  );
 }
 
 function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
@@ -408,6 +420,21 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     const body = parseRequestPart(createPlanRequestSchema, request.body, "body");
 
     return createPlanResponseSchema.parse(await plannerService.createPlan(session.userId, body));
+  });
+
+  app.get("/plans/:id", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const params = parseRequestPart(planParamsSchema, request.params, "params");
+
+    return planDetailResponseSchema.parse(await plannerService.getPlan(session.userId, params.id));
+  });
+
+  app.post("/plans/:id/refine", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const params = parseRequestPart(planParamsSchema, request.params, "params");
+    const body = parseRequestPart(refinePlanRequestSchema, request.body, "body");
+
+    return planDetailResponseSchema.parse(await plannerService.refinePlan(session.userId, params.id, body));
   });
 
   app.setNotFoundHandler((request, reply) => {

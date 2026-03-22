@@ -149,7 +149,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add unit and integration tests for schema validation, plan creation, and persistence; run root typecheck and test commands.
 	Review: Required; reviewer verifies the generated plan structure matches the contract and handles invalid AI output safely.
 
-- [ ] P6-S2: Add plan retrieval and refinement endpoints with revision tracking
+- [x] P6-S2: Add plan retrieval and refinement endpoints with revision tracking
 	Owner: Coder
 	Depends on: P6-S1
 	Acceptance: Authenticated endpoints exist to fetch a saved plan and request AI-driven refinements such as recipe swaps, ingredient exclusions, and macro changes while preserving revision history.
@@ -235,7 +235,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 ## Review Summary
 
 - Overall status: In progress.
-- Last reviewed item: P6-S1.
+- Last reviewed item: P6-S2.
 - Last review outcome: approved.
 - Review before completion: Required for every step, per .ai/orchestrator.config.json.
 - Maximum coder retries from tester: 2.
@@ -251,7 +251,9 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - P5-S3 is complete and approved; apps/mobile now provides the signed-in onboarding chat and profile confirmation flow, dashboard entry points for empty and existing profiles, structured profile review with explicit allergy notes, and regression coverage for loading, retry, and save/revise race handling.
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
-- The next actionable step is P6-S2.
+- P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
+- The next actionable step is P6-S3.
+
 
 
 

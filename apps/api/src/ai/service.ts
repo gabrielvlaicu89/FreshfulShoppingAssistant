@@ -12,7 +12,12 @@ import { type AnthropicConfig } from "../config.js";
 import { type ClaudeClient, createAnthropicClient } from "./client.js";
 import { ClaudeUsageLimitError } from "./errors.js";
 import { parseStructuredResponse } from "./parser.js";
-import { assembleMealPlanPrompt, assembleOnboardingReplyPrompt, assembleProfileExtractionPrompt } from "./prompts.js";
+import {
+  assembleMealPlanPrompt,
+  assembleMealPlanRefinementPrompt,
+  assembleOnboardingReplyPrompt,
+  assembleProfileExtractionPrompt
+} from "./prompts.js";
 import { selectClaudeModel, type ClaudeModelTier, type ClaudeTask } from "./routing.js";
 
 const profileExtractionEnvelopeSchema = z.discriminatedUnion("status", [
@@ -93,10 +98,24 @@ export interface MealPlanGenerationResponse {
   usage: ClaudeServiceUsage;
 }
 
+export interface MealPlanRefinementRequest {
+  profile: MealPlanGenerationRequest["profile"];
+  currentPlan: GeneratedMealPlan;
+  refinementPrompt: string;
+}
+
+export interface MealPlanRefinementResponse {
+  plan: GeneratedMealPlan | null;
+  rawText: string;
+  parseFailureReason: "missing_json" | "invalid_json" | "schema_mismatch" | null;
+  usage: ClaudeServiceUsage;
+}
+
 export interface ClaudeService {
   createOnboardingReply(request: OnboardingReplyRequest): Promise<OnboardingReplyResponse>;
   extractProfile(request: ProfileExtractionRequest): Promise<ProfileExtractionResponse>;
   createMealPlan(request: MealPlanGenerationRequest): Promise<MealPlanGenerationResponse>;
+  refineMealPlan(request: MealPlanRefinementRequest): Promise<MealPlanRefinementResponse>;
 }
 
 export interface CreateClaudeServiceOptions {
@@ -225,6 +244,28 @@ export function createClaudeService(options: CreateClaudeServiceOptions): Claude
       enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
 
       const route = resolveModel(options.config, "meal-plan-generation", prompt.transcriptMessageCount, prompt.promptChars);
+      const response = await client.createMessage({
+        model: route.model,
+        system: prompt.system,
+        maxTokens: options.config.usage.maxOutputTokens,
+        messages: prompt.messages
+      });
+      const parsed = parseStructuredResponse(response.text, generatedMealPlanSchema);
+
+      return {
+        plan: parsed.data,
+        rawText: response.text.trim(),
+        parseFailureReason: parsed.failureReason,
+        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+      };
+    },
+
+    async refineMealPlan(request) {
+      const prompt = assembleMealPlanRefinementPrompt(request);
+
+      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
+
+      const route = resolveModel(options.config, "meal-plan-refinement", prompt.transcriptMessageCount, prompt.promptChars);
       const response = await client.createMessage({
         model: route.model,
         system: prompt.system,

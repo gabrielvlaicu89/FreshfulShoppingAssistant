@@ -6,16 +6,28 @@ import type { ClaudeService } from "../ai/service.js";
 import type { ProfileService } from "../profile/service.js";
 import {
   createInvalidGeneratedPlanError,
+  createInvalidRefinedPlanError,
+  createPlannerPlanNotFoundError,
   createPlannerProfileRequiredError,
   createPlannerServiceUnavailableError,
   createPlannerUpstreamError,
   createPlannerUsageLimitError
 } from "./errors.js";
-import { createPlanResponseSchema, type CreatePlanRequest, type CreatePlanResponse, type GeneratedMealPlan } from "./contracts.js";
-import type { PlannerRepository } from "./repository.js";
+import {
+  createPlanResponseSchema,
+  planDetailResponseSchema,
+  type CreatePlanRequest,
+  type CreatePlanResponse,
+  type GeneratedMealPlan,
+  type PlanDetailResponse,
+  type RefinePlanRequest
+} from "./contracts.js";
+import type { PersistedPlanDetail, PlannerRepository } from "./repository.js";
 
 export interface PlannerService {
   createPlan(userId: string, input: CreatePlanRequest): Promise<CreatePlanResponse>;
+  getPlan(userId: string, planId: string): Promise<PlanDetailResponse>;
+  refinePlan(userId: string, planId: string, input: RefinePlanRequest): Promise<PlanDetailResponse>;
 }
 
 export interface CreatePlannerServiceOptions {
@@ -60,6 +72,40 @@ function validateGeneratedPlanAgainstRequest(plan: GeneratedMealPlan, input: Cre
 
     if (actualSlots.some((slot, index) => slot !== requestedSlots[index])) {
       return `Day ${day.dayNumber} meal slots do not match the requested meal slot set.`;
+    }
+  }
+
+  return null;
+}
+
+function validateRefinedPlanAgainstSource(plan: GeneratedMealPlan, sourcePlan: PersistedPlanDetail): string | null {
+  if (plan.durationDays !== sourcePlan.template.durationDays) {
+    return `Expected durationDays ${sourcePlan.template.durationDays}, received ${plan.durationDays}.`;
+  }
+
+  if (!hasSequentialDayNumbers(plan.days.map((day) => day.dayNumber), sourcePlan.template.durationDays)) {
+    return `Expected dayNumber values 1..${sourcePlan.template.durationDays} in sequence.`;
+  }
+
+  const sourceSlotsByDay = new Map(
+    sourcePlan.template.days.map((day) => [day.dayNumber, sortSlots(day.meals.map((meal) => meal.slot))])
+  );
+
+  for (const day of plan.days) {
+    const expectedSlots = sourceSlotsByDay.get(day.dayNumber);
+
+    if (!expectedSlots) {
+      return `Day ${day.dayNumber} is not present in the source meal plan.`;
+    }
+
+    const actualSlots = sortSlots(day.meals.map((meal) => meal.slot));
+
+    if (actualSlots.length !== expectedSlots.length) {
+      return `Day ${day.dayNumber} contains ${actualSlots.length} meal slots, expected ${expectedSlots.length}.`;
+    }
+
+    if (actualSlots.some((slot, index) => slot !== expectedSlots[index])) {
+      return `Day ${day.dayNumber} meal slots do not match the source meal plan.`;
     }
   }
 
@@ -133,6 +179,80 @@ export function createPlannerService(options: CreatePlannerServiceOptions): Plan
 
       return createPlanResponseSchema.parse(
         await options.repository.createForUser(userId, generation.plan, input.startDate)
+      );
+    },
+
+    async getPlan(userId, planId) {
+      const plan = await options.repository.getForUser(userId, planId);
+
+      if (!plan) {
+        throw createPlannerPlanNotFoundError();
+      }
+
+      return planDetailResponseSchema.parse(plan);
+    },
+
+    async refinePlan(userId, planId, input) {
+      const aiService = options.aiService;
+
+      if (!aiService) {
+        throw createPlannerServiceUnavailableError();
+      }
+
+      const profile = await options.profileService.getProfile(userId);
+
+      if (!profile) {
+        throw createPlannerProfileRequiredError();
+      }
+
+      const sourcePlan = await options.repository.getForUser(userId, planId);
+
+      if (!sourcePlan) {
+        throw createPlannerPlanNotFoundError();
+      }
+
+      let refinement;
+
+      try {
+        refinement = await aiService.refineMealPlan({
+          profile: buildPlannerContext(profile),
+          currentPlan: {
+            title: sourcePlan.template.title,
+            durationDays: sourcePlan.template.durationDays,
+            recipes: sourcePlan.template.recipes,
+            days: sourcePlan.template.days,
+            metadata: sourcePlan.template.metadata
+          },
+          refinementPrompt: input.prompt
+        });
+      } catch (error) {
+        if (error instanceof ClaudeUsageLimitError) {
+          throw createPlannerUsageLimitError(error.message, error);
+        }
+
+        if (error instanceof ClaudeUpstreamError) {
+          throw createPlannerUpstreamError(error.statusCode, error.retryable, error);
+        }
+
+        throw error;
+      }
+
+      if (!refinement.plan) {
+        throw createInvalidRefinedPlanError(refinement.parseFailureReason ?? "unknown", {
+          rawText: refinement.rawText
+        });
+      }
+
+      const constraintFailure = validateRefinedPlanAgainstSource(refinement.plan, sourcePlan);
+
+      if (constraintFailure) {
+        throw createInvalidRefinedPlanError("constraint_mismatch", {
+          validationMessage: constraintFailure
+        });
+      }
+
+      return planDetailResponseSchema.parse(
+        await options.repository.createRevisionForUser(userId, sourcePlan, refinement.plan)
       );
     }
   };

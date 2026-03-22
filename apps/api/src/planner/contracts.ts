@@ -148,3 +148,46 @@ export const createPlanResponseSchema = z
   .strict();
 
 export type CreatePlanResponse = z.infer<typeof createPlanResponseSchema>;
+
+const identifierSchema = z.string().trim().min(1);
+const nullableIsoDateSchema = z.string().regex(isoDatePattern, "Expected YYYY-MM-DD date format.").nullable();
+
+export const planParamsSchema = z
+  .object({
+    id: identifierSchema
+  })
+  .strict();
+
+export type PlanParams = z.infer<typeof planParamsSchema>;
+
+export const refinePlanRequestSchema = z
+  .object({
+    prompt: z.string().trim().min(1).max(2000)
+  })
+  .strict();
+
+export type RefinePlanRequest = z.infer<typeof refinePlanRequestSchema>;
+
+export const planRevisionSchema = z
+  .object({
+    templateId: identifierSchema,
+    parentTemplateId: identifierSchema.nullable(),
+    title: z.string().trim().min(1),
+    createdAt: z.string().trim().min(1),
+    instanceId: identifierSchema.nullable(),
+    startDate: nullableIsoDateSchema,
+    endDate: nullableIsoDateSchema
+  })
+  .strict();
+
+export type PlanRevision = z.infer<typeof planRevisionSchema>;
+
+export const planDetailResponseSchema = z
+  .object({
+    template: mealPlanTemplateSchema,
+    instance: mealPlanInstanceSchema.nullable(),
+    revisionHistory: z.array(planRevisionSchema).min(1)
+  })
+  .strict();
+
+export type PlanDetailResponse = z.infer<typeof planDetailResponseSchema>;
