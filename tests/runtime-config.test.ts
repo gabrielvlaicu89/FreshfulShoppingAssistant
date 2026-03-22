@@ -33,6 +33,8 @@ test("getApiConfig loads validated backend settings from an env file", () => {
       "APP_ENV=test",
       "PORT=4100",
       "DATABASE_URL=postgres://freshful:freshful@localhost:5432/freshful_test",
+      "APP_SESSION_SECRET=abcdefghijklmnopqrstuvwxyz123456",
+      "APP_SESSION_TTL_SECONDS=7200",
       "GOOGLE_WEB_CLIENT_ID=test-web-client.apps.googleusercontent.com",
       "ANTHROPIC_API_KEY=test-anthropic-key",
       "FRESHFUL_BASE_URL=https://staging.freshful.ro",
@@ -47,6 +49,11 @@ test("getApiConfig loads validated backend settings from an env file", () => {
     appEnv: "test",
     port: 4100,
     databaseUrl: "postgres://freshful:freshful@localhost:5432/freshful_test",
+    session: {
+      secret: "abcdefghijklmnopqrstuvwxyz123456",
+      ttlSeconds: 7200,
+      issuer: "@freshful/api"
+    },
     google: {
       webClientId: "test-web-client.apps.googleusercontent.com"
     },
@@ -100,6 +107,8 @@ test("env example files document the required backend and mobile keys", () => {
     "APP_ENV",
     "PORT",
     "DATABASE_URL",
+    "APP_SESSION_SECRET",
+    "APP_SESSION_TTL_SECONDS",
     "GOOGLE_WEB_CLIENT_ID",
     "ANTHROPIC_API_KEY",
     "FRESHFUL_BASE_URL",

@@ -1,7 +1,14 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 
+import { googleAuthRequestSchema, googleAuthResponseSchema } from "./auth/contracts.js";
+import { createAuthServiceUnavailableError } from "./auth/errors.js";
+import { createGoogleTokenVerifier, type GoogleTokenVerifier } from "./auth/google.js";
+import { createAuthUserRepository, type AuthUserRepository } from "./auth/repository.js";
+import { createAppSessionIssuer, type AppSessionIssuer } from "./auth/session.js";
+import { createAuthService, type AuthService } from "./auth/service.js";
 import { type ApiConfig, getApiConfig } from "./config.js";
+import { closeApiDatabase, createApiDatabase } from "./db/client.js";
 import {
   createNotFoundPayload,
   createRequestValidationError,
@@ -58,6 +65,11 @@ export interface CreateApiAppOptions {
   config?: ApiConfig;
   services?: Partial<ApiServices>;
   logger?: FastifyServerOptions["logger"];
+  auth?: {
+    verifier?: GoogleTokenVerifier;
+    userRepository?: AuthUserRepository;
+    sessionIssuer?: AppSessionIssuer;
+  };
 }
 
 declare module "fastify" {
@@ -109,6 +121,10 @@ function createHealthResponse(context: ApiAppContext, detailLevel: "summary" | "
   });
 }
 
+function isAuthService(value: unknown): value is AuthService {
+  return typeof value === "object" && value !== null && "signInWithGoogle" in value;
+}
+
 export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance {
   const config = options.config ?? getApiConfig();
   const app = Fastify({
@@ -120,10 +136,38 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
             level: config.appEnv === "development" ? "info" : "warn"
           })
   });
-  const services = createApiServices(options.services);
+  let ownedDatabase: ReturnType<typeof createApiDatabase> | undefined;
+  const authImplementation = isAuthService(options.services?.auth?.implementation)
+    ? options.services.auth.implementation
+    : createAuthService({
+        verifier: options.auth?.verifier ?? createGoogleTokenVerifier({ webClientId: config.google.webClientId }),
+        userRepository:
+          options.auth?.userRepository ??
+          createAuthUserRepository(
+            (ownedDatabase ??=
+              createApiDatabase({
+                databaseUrl: config.databaseUrl,
+                maxConnections: config.appEnv === "production" ? 5 : 1
+              })).db
+          ),
+        sessionIssuer:
+          options.auth?.sessionIssuer ??
+          createAppSessionIssuer({
+            issuer: config.session.issuer,
+            secret: config.session.secret,
+            ttlSeconds: config.session.ttlSeconds
+          })
+      });
   const appContext: ApiAppContext = {
     config,
-    services,
+    services: createApiServices({
+      ...options.services,
+      auth: options.services?.auth ?? {
+        name: "auth",
+        status: "ready",
+        implementation: authImplementation
+      }
+    }),
     startedAt: new Date().toISOString(),
     startedAtEpochMs: Date.now()
   };
@@ -171,7 +215,22 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
   });
 
   app.addHook("onClose", async () => {
+    if (ownedDatabase) {
+      await closeApiDatabase(ownedDatabase);
+    }
+
     app.log.info("API HTTP foundation closed.");
+  });
+
+  app.post("/auth/google", async (request) => {
+    const body = parseRequestPart(googleAuthRequestSchema, request.body, "body");
+    const authService = appContext.services.auth.implementation;
+
+    if (!isAuthService(authService)) {
+      throw createAuthServiceUnavailableError();
+    }
+
+    return googleAuthResponseSchema.parse(await authService.signInWithGoogle(body));
   });
 
   app.get("/health", async (request) => {

@@ -9,6 +9,11 @@ function createTestApiConfig(): ApiConfig {
     appEnv: "test",
     port: 3101,
     databaseUrl: "postgres://freshful:freshful@localhost:5432/freshful_test",
+    session: {
+      secret: "abcdefghijklmnopqrstuvwxyz123456",
+      ttlSeconds: 3600,
+      issuer: "@freshful/api"
+    },
     google: {
       webClientId: "test-web-client.apps.googleusercontent.com"
     },
@@ -36,7 +41,7 @@ test("createApiApp readies the Fastify foundation without binding a network port
   await app.ready();
 
   assert.equal(app.appContext.config.appEnv, "test");
-  assert.equal(app.appContext.services.auth.status, "pending");
+  assert.equal(app.appContext.services.auth.status, "ready");
 });
 
 test("GET /health returns the backend foundation status and service shell metadata", async (t) => {
@@ -71,7 +76,7 @@ test("GET /health returns the backend foundation status and service shell metada
   assert.equal(payload.service, "@freshful/api");
   assert.equal(payload.environment, "test");
   assert.equal(payload.detailLevel, "full");
-  assert.equal(payload.services.auth.status, "pending");
+  assert.equal(payload.services.auth.status, "ready");
   assert.equal(payload.services.planner.status, "ready");
   assert.equal(typeof payload.timestamp, "string");
   assert.equal(typeof payload.uptimeSeconds, "number");

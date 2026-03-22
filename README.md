@@ -68,14 +68,14 @@ The repository is no longer just a Copilot starter. It already contains the proj
 
 This repo keeps runtime configuration separated by workspace:
 
-- `apps/api/.env` is for backend-only settings, including `DATABASE_URL`, `GOOGLE_WEB_CLIENT_ID`, `ANTHROPIC_API_KEY`, and Freshful integration values.
+- `apps/api/.env` is for backend-only settings, including `DATABASE_URL`, `APP_SESSION_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `ANTHROPIC_API_KEY`, and Freshful integration values.
 - `apps/mobile/.env` is limited to safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, and request timeout settings used to inject mobile runtime config.
 
 The checked-in `.env.example` files define the required keys without containing live credentials. `npm run env:bootstrap` copies those templates locally if the real `.env` files do not exist yet. Keep actual secrets in untracked local env files for development and in your deployment secret manager for shared environments.
 
 Current validated runtime loaders:
 
-- `apps/api/src/config.ts` validates the full backend runtime settings for environment selection, HTTP port, database access, Google auth, Anthropic access, and Freshful integration, while `apps/api/src/db/config.ts` keeps DB-only tooling limited to `DATABASE_URL`.
+- `apps/api/src/config.ts` validates the full backend runtime settings for environment selection, HTTP port, database access, app-session signing, Google auth, Anthropic access, and Freshful integration, while `apps/api/src/db/config.ts` keeps DB-only tooling limited to `DATABASE_URL`.
 - `apps/mobile/src/config.ts` validates injected mobile runtime settings that are safe to keep on-device and explicitly excludes server-side secrets and local file reads at app runtime.
 
 ## API Persistence Workflow
@@ -122,7 +122,7 @@ The repo still uses the plan-first orchestration flow, but it now operates on a 
 ## What Is Still Placeholder
 
 - The mobile workspace is scaffold-only and does not yet contain the real React Native app shell.
-- The API workspace has persistence foundations but not the HTTP service, auth, AI orchestration, or Freshful adapter yet.
+- The API workspace now has the HTTP foundation plus Google token verification and app session issuance, but it does not yet include protected profile endpoints, AI orchestration, or the Freshful adapter.
 
 ## Validation Baseline
 

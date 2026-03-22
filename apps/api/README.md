@@ -1,6 +1,6 @@
 # API Workspace
 
-This workspace now includes the persistence foundation for P2-S2 using PostgreSQL, Drizzle ORM, and generated SQL migrations.
+This workspace now includes the persistence foundation from P2-S2 plus the backend auth slice from P3-S2.
 
 ## Persistence Stack
 
@@ -36,6 +36,8 @@ Required backend environment variables:
 - `APP_ENV`: `development`, `test`, or `production`
 - `PORT`: local API port for the backend runtime
 - `DATABASE_URL`: PostgreSQL connection string for Drizzle and runtime access
+- `APP_SESSION_SECRET`: symmetric signing secret for app-issued JWT sessions; use at least 32 characters
+- `APP_SESSION_TTL_SECONDS`: app session lifetime used for issued JWT access tokens
 - `GOOGLE_WEB_CLIENT_ID`: Google OAuth client ID used for backend token verification in later auth steps
 - `ANTHROPIC_API_KEY`: server-side Claude access key; never expose this to the mobile app
 - `FRESHFUL_BASE_URL`: Freshful origin used by the backend integration layer
@@ -57,6 +59,17 @@ P3-S1 adds a Fastify-based HTTP shell that keeps startup and tests separate:
 - `GET /health` provides a smoke-testable readiness endpoint with environment metadata and placeholder service wiring for auth, AI, planner, and Freshful modules.
 - Request and response logging hooks emit structured fields for request ID, method, URL, status code, and duration.
 - Structured error payloads follow the shared contracts package so later modules can fail consistently.
+
+## Auth Endpoint
+
+P3-S2 adds server-side Google token verification and local app session issuance:
+
+- `POST /auth/google` accepts `{ "idToken": "..." }`.
+- The backend verifies the Google ID token against `GOOGLE_WEB_CLIENT_ID`.
+- The local `users` row is created or updated using the verified Google subject and profile fields.
+- The response returns app-scoped session material for the mobile client: a signed bearer JWT plus the local user snapshot.
+
+The issued JWT is intentionally app-scoped rather than a pass-through Google token. It uses the backend-managed `APP_SESSION_SECRET`, includes issuer and expiry claims, and is suitable for later protected-route middleware in P3-S3.
 
 To start the backend foundation locally after bootstrapping env files:
 

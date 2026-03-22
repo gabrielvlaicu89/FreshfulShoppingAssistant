@@ -80,12 +80,12 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add backend smoke tests for startup and health responses, then run root lint, typecheck, and test commands.
 	Review: Approved; reviewer confirmed the Fastify shell, health route, error handling, logging hooks, and service composition seam are production-oriented for the current scope and ready for P3-S2 extension.
 
-- [ ] P3-S2: Implement Google token verification and app session issuance
+- [x] P3-S2: Implement Google token verification and app session issuance
 	Owner: Coder
 	Depends on: P3-S1
 	Acceptance: POST /auth/google verifies Google identity tokens server-side, creates or updates the local user record, and returns the app session material required by the mobile client.
 	Tests: Add unit and integration tests for valid, invalid, and expired token cases; run backend auth tests and root validation commands.
-	Review: Required; reviewer verifies token handling, session boundaries, and failure cases.
+	Review: Approved; reviewer confirmed the Google token verification flow, local user upsert behavior, backend-issued app JWT session boundary, and auth failure handling are correct for the current scope.
 
 - [ ] P3-S3: Implement secure profile read and update endpoints
 	Owner: Coder
@@ -250,6 +250,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - The next actionable step is P2-S3.
+
 
 
 

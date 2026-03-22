@@ -16,6 +16,8 @@ const apiEnvironmentSchema = z
     APP_ENV: z.enum(["development", "test", "production"]),
     PORT: z.coerce.number().int().min(1).max(65535),
     DATABASE_URL: databaseUrlSchema,
+    APP_SESSION_SECRET: z.string().trim().min(32),
+    APP_SESSION_TTL_SECONDS: z.coerce.number().int().positive().max(31_536_000),
     GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1),
     ANTHROPIC_API_KEY: z.string().trim().min(1),
     FRESHFUL_BASE_URL: z.string().trim().url(),
@@ -30,6 +32,11 @@ export interface ApiConfig {
   appEnv: ApiEnvironment["APP_ENV"];
   port: number;
   databaseUrl: string;
+  session: {
+    secret: string;
+    ttlSeconds: number;
+    issuer: string;
+  };
   google: {
     webClientId: string;
   };
@@ -59,6 +66,7 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
   const mergedEnvironment: Record<string, string | undefined> = {
     APP_ENV: "development",
     PORT: "3000",
+    APP_SESSION_TTL_SECONDS: "2592000",
     FRESHFUL_SEARCH_PATH: "/search",
     FRESHFUL_REQUEST_TIMEOUT_MS: "10000",
     ...readApiEnvironmentFile(envFilePath),
@@ -68,6 +76,8 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
     APP_ENV: mergedEnvironment.APP_ENV,
     PORT: mergedEnvironment.PORT,
     DATABASE_URL: mergedEnvironment.DATABASE_URL,
+    APP_SESSION_SECRET: mergedEnvironment.APP_SESSION_SECRET,
+    APP_SESSION_TTL_SECONDS: mergedEnvironment.APP_SESSION_TTL_SECONDS,
     GOOGLE_WEB_CLIENT_ID: mergedEnvironment.GOOGLE_WEB_CLIENT_ID,
     ANTHROPIC_API_KEY: mergedEnvironment.ANTHROPIC_API_KEY,
     FRESHFUL_BASE_URL: mergedEnvironment.FRESHFUL_BASE_URL,
@@ -79,6 +89,11 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
     appEnv: parsedEnvironment.APP_ENV,
     port: parsedEnvironment.PORT,
     databaseUrl: parsedEnvironment.DATABASE_URL,
+    session: {
+      secret: parsedEnvironment.APP_SESSION_SECRET,
+      ttlSeconds: parsedEnvironment.APP_SESSION_TTL_SECONDS,
+      issuer: "@freshful/api"
+    },
     google: {
       webClientId: parsedEnvironment.GOOGLE_WEB_CLIENT_ID
     },

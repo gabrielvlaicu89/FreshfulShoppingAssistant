@@ -2,6 +2,23 @@ import { workspaceCatalog } from "@freshful/contracts";
 import { pathToFileURL } from "node:url";
 
 export { createApiApp, startApiServer, type ApiAppContext, type CreateApiAppOptions, type StartApiServerOptions } from "./app.js";
+export {
+  googleAuthRequestSchema,
+  googleAuthResponseSchema,
+  type AppSession,
+  type AuthenticatedUser,
+  type GoogleAuthRequest,
+  type GoogleAuthResponse
+} from "./auth/contracts.js";
+export {
+  createAuthServiceUnavailableError,
+  createExpiredGoogleTokenError,
+  createInvalidGoogleTokenError
+} from "./auth/errors.js";
+export { createGoogleTokenVerifier, type GoogleIdentity, type GoogleTokenVerifier } from "./auth/google.js";
+export { createAuthUserRepository, type AuthDatabase, type AuthUserRepository } from "./auth/repository.js";
+export { createAppSessionIssuer, type AppSessionIssuer } from "./auth/session.js";
+export { createAuthService, type AuthService } from "./auth/service.js";
 export { closeApiDatabase, createApiDatabase } from "./db/client.js";
 export { ApiHttpError } from "./errors.js";
 export { getApiConfig, resolveApiWorkspacePath } from "./config.js";
