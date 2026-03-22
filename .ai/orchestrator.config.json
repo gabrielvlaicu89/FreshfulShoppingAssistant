@@ -1,0 +1,41 @@
+{
+  "descriptionPath": "DESCRIPTION.md",
+  "planPath": "PLAN.md",
+  "statePath": ".ai/state.json",
+  "lastRunPath": ".ai/last-run.md",
+  "logsDirectory": ".ai/logs",
+  "validation": {
+    "testCommand": "npm test",
+    "lintCommand": "npm run lint",
+    "typecheckCommand": "npm run typecheck",
+    "buildCommand": "npm run build",
+    "runTypecheck": true,
+    "runBuild": false
+  },
+  "git": {
+    "branchStrategy": "current-branch",
+    "autoCommit": false,
+    "autoPush": false,
+    "pushRequiresApproval": true,
+    "commitMessageStyle": "step-first"
+  },
+  "workflow": {
+    "maxCoderRetriesFromTester": 2,
+    "maxCoderRetriesFromReviewer": 2,
+    "requireReviewBeforeCompletion": true,
+    "updateStateAfterEveryStep": true,
+    "stopOnBlockedStep": true
+  },
+  "hooks": {
+    "enabled": true,
+    "logLifecycleEvents": true,
+    "validateWorkspaceBeforeAutomation": true,
+    "checkChangedFilesAfterEdits": true,
+    "guardPushOperations": true
+  },
+  "features": {
+    "usePlanParser": true,
+    "useCommitDraftGenerator": true,
+    "useLastRunLog": true
+  }
+}

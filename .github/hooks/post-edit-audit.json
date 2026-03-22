@@ -1,0 +1,17 @@
+{
+  "name": "post-edit-audit",
+  "description": "Preview hook: log edit activity and inspect changed files after file edits.",
+  "event": "PostToolUse",
+  "match": {
+    "tool": "apply_patch"
+  },
+  "run": [
+    "node scripts/log-hook-event.mjs post-edit",
+    "node scripts/check-changed-files.mjs"
+  ],
+  "blocking": false,
+  "notes": [
+    "This hook is advisory by default.",
+    "If your environment supports stricter policies, you can make changed-file checks blocking."
+  ]
+}

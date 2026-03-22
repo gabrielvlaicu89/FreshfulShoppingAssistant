@@ -1,0 +1,22 @@
+{
+  "name": "pre-push-guard",
+  "description": "Preview hook: require explicit configuration before allowing push-oriented automation.",
+  "event": "PreToolUse",
+  "match": {
+    "agent": "orchestrator",
+    "tool": "run_in_terminal",
+    "commandPattern": "git push"
+  },
+  "run": "node scripts/validate-workspace.mjs --mode default",
+  "blocking": true,
+  "policy": {
+    "configPath": ".ai/orchestrator.config.json",
+    "requiredFlags": [
+      "git.autoPush"
+    ]
+  },
+  "notes": [
+    "Actual clients may expose push approval through UI rather than JSON policy fields.",
+    "Treat this file as a repository-local safeguard template that may need adaptation per client release."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "session-start-log",
+  "description": "Preview hook: log when an agent session starts so orchestration activity is auditable.",
+  "event": "SessionStart",
+  "run": "node scripts/log-hook-event.mjs session-start",
+  "blocking": false,
+  "notes": [
+    "If the client does not support SessionStart hooks, run npm run hooks:log -- session-start manually.",
+    "The log target is .ai/logs/hook-events.log."
+  ]
+}

@@ -5,10 +5,22 @@
   "type": "module",
   "description": "Backend workspace scaffold for the Freshful Shopping Assistant API.",
   "scripts": {
+    "db:dev:down": "docker compose -f compose.yaml down -v",
+    "db:dev:up": "docker compose -f compose.yaml up -d",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --project tsconfig.json --pretty false --noEmit"
   },
   "dependencies": {
-    "@freshful/contracts": "0.1.0"
+    "@freshful/contracts": "0.1.0",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.44.6",
+    "postgres": "^3.4.7",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.12",
+    "drizzle-kit": "^0.31.4"
   }
 }

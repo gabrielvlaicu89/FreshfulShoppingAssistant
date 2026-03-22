@@ -1,6 +1,10 @@
 import { workspaceCatalog } from "@freshful/contracts";
 import { pathToFileURL } from "node:url";
 
+export { closeApiDatabase, createApiDatabase } from "./db/client.js";
+export { getDatabaseConfig } from "./db/config.js";
+export { databaseTables, sensitiveTableColumns } from "./db/schema.js";
+
 const defaultApiWorkspace = {
   name: "@freshful/api",
   path: "apps/api"
@@ -18,5 +22,5 @@ export function describeApiWorkspace(): string {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.log(`API workspace placeholder ready at ${describeApiWorkspace()}.`);
-  console.log("Fastify server wiring belongs to P3-S1 and later backend steps.");
+  console.log("Database schema and migrations are ready for P2-S2; Fastify server wiring belongs to P3-S1 and later backend steps.");
 }

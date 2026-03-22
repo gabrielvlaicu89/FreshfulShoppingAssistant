@@ -1,0 +1,15 @@
+{
+  "name": "pre-tool-validation",
+  "description": "Preview hook: validate required workflow files before orchestration-sensitive terminal actions.",
+  "event": "PreToolUse",
+  "match": {
+    "agent": "orchestrator",
+    "tool": "run_in_terminal"
+  },
+  "run": "node scripts/validate-workspace.mjs --mode default",
+  "blocking": true,
+  "notes": [
+    "Tighten the match rules for your client if it supports command-pattern filters.",
+    "Use strict-description mode when you want to block orchestration until DESCRIPTION.md is replaced with real content."
+  ]
+}

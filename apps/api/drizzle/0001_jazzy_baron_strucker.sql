@@ -1,0 +1,6 @@
+ALTER TABLE "meal_plan_instances" ADD CONSTRAINT "meal_plan_instances_user_id_id_key" UNIQUE("user_id","id");--> statement-breakpoint
+ALTER TABLE "meal_plan_templates" ADD CONSTRAINT "meal_plan_templates_user_id_id_key" UNIQUE("user_id","id");--> statement-breakpoint
+ALTER TABLE "onboarding_transcripts" ADD CONSTRAINT "onboarding_transcripts_user_id_id_key" UNIQUE("user_id","id");--> statement-breakpoint
+ALTER TABLE "household_profiles" ADD CONSTRAINT "household_profiles_user_id_raw_chat_history_owner_fk" FOREIGN KEY ("user_id","raw_chat_history_id") REFERENCES "public"."onboarding_transcripts"("user_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "meal_plan_instances" ADD CONSTRAINT "meal_plan_instances_user_id_template_owner_fk" FOREIGN KEY ("user_id","template_id") REFERENCES "public"."meal_plan_templates"("user_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "shopping_lists" ADD CONSTRAINT "shopping_lists_user_id_plan_owner_fk" FOREIGN KEY ("user_id","plan_id") REFERENCES "public"."meal_plan_instances"("user_id","id") ON DELETE no action ON UPDATE no action;
