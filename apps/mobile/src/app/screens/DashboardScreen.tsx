@@ -4,7 +4,8 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { useAuth } from "../auth/context";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { useAssistantHealthQuery } from "../queries/assistant-health";
+import type { DashboardProfileSummary } from "../profile/cache-storage";
+import { useProfileSummary } from "../queries/profile";
 import { useAssistantShellStore } from "../state/app-store";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -19,24 +20,122 @@ function formatDraftLabel(planDays: number): string {
   return `${planDays}-day draft`;
 }
 
+function formatHousehold(profile: DashboardProfileSummary): string {
+  const householdLabel =
+    profile.householdType === "single"
+      ? "Single household"
+      : profile.householdType === "couple"
+        ? "Couple household"
+        : "Family household";
+
+  if (profile.numChildren <= 0) {
+    return householdLabel;
+  }
+
+  return `${householdLabel} · ${profile.numChildren} ${profile.numChildren === 1 ? "child" : "children"}`;
+}
+
+function formatList(values: string[], emptyLabel: string): string {
+  return values.length > 0 ? values.join(", ") : emptyLabel;
+}
+
+function formatBudgetAndPrep(profile: DashboardProfileSummary): string {
+  return `${profile.budgetBand} budget · ${profile.maxPrepTimeMinutes} min max prep`;
+}
+
+function getProfileStatusLabel(dataSource: ReturnType<typeof useProfileSummary>["dataSource"]): string {
+  if (dataSource === "live") {
+    return "Live profile";
+  }
+
+  if (dataSource === "cache") {
+    return "Cached profile";
+  }
+
+  return "Profile needed";
+}
+
 export function DashboardScreen({ navigation }: Props): React.JSX.Element {
   const planDays = useAssistantShellStore((state) => state.planDays);
   const includedMeals = useAssistantShellStore((state) => state.includedMeals);
   const auth = useAuth();
-  const healthQuery = useAssistantHealthQuery();
+  const profileSummary = useProfileSummary();
+  const profile = profileSummary.profile;
 
   return (
     <Screen contentContainerStyle={styles.content}>
       <Card tone="accent">
         <View style={styles.heroRow}>
           <View style={styles.heroCopy}>
-            <AppText variant="eyebrow">Authenticated shell</AppText>
-            <AppText variant="heading">Signed in and ready for the next product slice.</AppText>
+            <AppText variant="eyebrow">Home dashboard</AppText>
+            <AppText variant="heading">Welcome back{auth.user?.displayName ? `, ${auth.user.displayName.split(" ")[0]}` : ""}.</AppText>
             <AppText variant="bodyMuted">
-              Session bootstrap now restores from secure storage, and the mobile app is using the backend-issued bearer token boundary described by the API.
+              The app keeps the backend-issued session in secure storage and refreshes your latest household profile from the API while keeping a local dashboard summary cache ready for offline-friendly relaunches.
             </AppText>
           </View>
-          <Badge label={auth.user?.email ?? "Signed in"} tone="success" />
+          <Badge label={getProfileStatusLabel(profileSummary.dataSource)} tone={profileSummary.dataSource === "empty" ? "warning" : "success"} />
+        </View>
+      </Card>
+
+      <Card>
+        <AppText variant="title">Profile summary</AppText>
+        <AppText variant="bodyMuted">{auth.user?.email ?? "Freshful user"}</AppText>
+        {profileSummary.isLoading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={palette.leaf} />
+            <AppText variant="body">Loading the latest profile snapshot.</AppText>
+          </View>
+        ) : null}
+        {profile ? (
+          <View style={styles.stack}>
+            <View style={styles.summaryGrid}>
+              <View style={styles.summaryItem}>
+                <AppText variant="caption">Household</AppText>
+                <AppText variant="body">{formatHousehold(profile)}</AppText>
+              </View>
+              <View style={styles.summaryItem}>
+                <AppText variant="caption">Budget and prep</AppText>
+                <AppText variant="body">{formatBudgetAndPrep(profile)}</AppText>
+              </View>
+            </View>
+            <AppText variant="bodyMuted">Cuisine preferences: {formatList(profile.cuisinePreferences, "No cuisine preferences saved yet")}</AppText>
+            {profileSummary.dataSource === "cache" ? (
+              <AppText variant="bodyMuted">Showing the last locally cached dashboard summary because the backend could not be reached.</AppText>
+            ) : null}
+            {profileSummary.isRefreshing ? <AppText variant="bodyMuted">Refreshing the cached snapshot from the backend.</AppText> : null}
+          </View>
+        ) : null}
+        {!profile && !profileSummary.isLoading ? (
+          <View style={styles.stack}>
+            <Badge label="Profile empty" tone="warning" />
+            <AppText variant="bodyMuted">
+              No household profile is stored yet. P5 onboarding will populate this summary once profile capture is available.
+            </AppText>
+          </View>
+        ) : null}
+        {profileSummary.isError ? (
+          <View style={styles.stack}>
+            <Badge label="Sync unavailable" tone="warning" />
+            <AppText variant="bodyMuted">The backend profile could not be loaded and no cached snapshot was available.</AppText>
+          </View>
+        ) : null}
+      </Card>
+
+      <Card>
+        <AppText variant="title">Planning</AppText>
+        <AppText variant="bodyMuted">
+          {formatDraftLabel(planDays)} with {includedMeals.join(", ")}. This is still a local planning stub until meal plan generation lands.
+        </AppText>
+        <View style={styles.actionsRow}>
+          <Button label="Plan next meals" onPress={() => navigation.navigate("PlannerPreview")} />
+        </View>
+      </Card>
+
+      <Card>
+        <AppText variant="title">Shopping lists</AppText>
+        <AppText variant="bodyMuted">The dashboard reserves a clear handoff for shopping lists while product mapping and cart handoff are still pending.</AppText>
+        <View style={styles.actionsRow}>
+          <Button label="Shopping lists soon" variant="ghost" disabled onPress={() => undefined} />
         </View>
       </Card>
 
@@ -46,53 +145,6 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
         <AppText variant="bodyMuted">Session expires at {auth.session ? new Date(auth.session.expiresAt).toLocaleString() : "unknown"}.</AppText>
         <View style={styles.actionsRow}>
           <Button label={auth.isBusy ? "Signing out..." : "Log out"} variant="ghost" disabled={auth.isBusy} onPress={() => void auth.signOut()} />
-        </View>
-      </Card>
-
-      <Card>
-        <AppText variant="title">Live backend check</AppText>
-        <AppText variant="bodyMuted">
-          This uses TanStack Query against the existing API health endpoint so the shell proves real server-state flow.
-        </AppText>
-        {healthQuery.isPending ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={palette.leaf} />
-            <AppText variant="body">Contacting {healthQuery.fetchStatus === "fetching" ? "the API" : "the cache"}.</AppText>
-          </View>
-        ) : null}
-        {healthQuery.isError ? (
-          <View style={styles.stack}>
-            <Badge label="Backend unavailable" tone="warning" />
-            <AppText variant="bodyMuted">
-              The app shell still renders offline-safe, but the API at the configured base URL did not answer.
-            </AppText>
-          </View>
-        ) : null}
-        {healthQuery.data ? (
-          <View style={styles.stack}>
-            <View style={styles.statusHeader}>
-              <Badge label={`${healthQuery.data.environment} runtime`} tone="neutral" />
-              <Badge label={`uptime ${Math.round(healthQuery.data.uptimeSeconds)}s`} tone="success" />
-            </View>
-            <View style={styles.serviceGrid}>
-              {Object.values(healthQuery.data.services).map((service) => (
-                <View key={service.name} style={styles.servicePill}>
-                  <AppText variant="caption">{service.name}</AppText>
-                  <Badge label={service.status} tone={service.status === "ready" ? "success" : "neutral"} />
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-      </Card>
-
-      <Card>
-        <AppText variant="title">Current shared draft</AppText>
-        <AppText variant="bodyMuted">
-          {formatDraftLabel(planDays)} with {includedMeals.join(", ")}. This state is still intentionally local while P4-S3 handles dashboard data and profile caching.
-        </AppText>
-        <View style={styles.actionsRow}>
-          <Button label="Tune plan preview" onPress={() => navigation.navigate("PlannerPreview")} />
         </View>
       </Card>
     </Screen>
@@ -119,17 +171,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.md
   },
-  statusHeader: {
+  summaryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm
   },
-  serviceGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm
-  },
-  servicePill: {
+  summaryItem: {
     minWidth: 134,
     padding: spacing.sm,
     borderRadius: 18,

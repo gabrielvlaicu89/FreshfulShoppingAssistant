@@ -1,6 +1,7 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, jest, test } from "@jest/globals";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as Keychain from "react-native-keychain";
 
@@ -9,6 +10,9 @@ import { getBundledMobileConfig } from "../src/app/config/runtime";
 import { resetAssistantShellStore } from "../src/app/state/app-store";
 
 const fetchMock = jest.fn<typeof fetch>();
+const asyncStorageGetItemMock = jest.mocked(AsyncStorage.getItem);
+const asyncStorageSetItemMock = jest.mocked(AsyncStorage.setItem);
+const asyncStorageRemoveItemMock = jest.mocked(AsyncStorage.removeItem);
 const getGenericPasswordMock = jest.mocked(Keychain.getGenericPassword);
 const setGenericPasswordMock = jest.mocked(Keychain.setGenericPassword);
 const resetGenericPasswordMock = jest.mocked(Keychain.resetGenericPassword);
@@ -56,9 +60,51 @@ function createAuthPayload() {
   };
 }
 
+function createProfilePayload() {
+  return {
+    userId: "user-1",
+    householdType: "family",
+    numChildren: 2,
+    dietaryRestrictions: ["vegetarian", "gluten-free"],
+    allergies: {
+      normalized: ["dairy"],
+      freeText: ["kiwi"]
+    },
+    medicalFlags: {
+      diabetes: false,
+      hypertension: false
+    },
+    goals: ["maintenance"],
+    cuisinePreferences: ["Romanian", "Mediterranean"],
+    favoriteIngredients: ["tomatoes", "lentils"],
+    dislikedIngredients: ["olives"],
+    budgetBand: "medium",
+    maxPrepTimeMinutes: 35,
+    cookingSkill: "intermediate",
+    rawChatHistoryId: "transcript-1"
+  };
+}
+
+function createCachedDashboardSummaryPayload() {
+  return {
+    summary: {
+      userId: "user-1",
+      householdType: "family",
+      numChildren: 2,
+      cuisinePreferences: ["Romanian", "Mediterranean"],
+      budgetBand: "medium",
+      maxPrepTimeMinutes: 35
+    },
+    cachedAt: "2026-03-22T09:30:00.000Z"
+  };
+}
+
 describe("mobile app shell", () => {
   beforeEach(() => {
     resetAssistantShellStore();
+    let profilePayload: ReturnType<typeof createProfilePayload> | null = createProfilePayload();
+    let profileError: Error | null = null;
+
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
 
@@ -72,6 +118,24 @@ describe("mobile app shell", () => {
         } as Response;
       }
 
+      if (url.includes("/profile")) {
+        expect(init?.headers).toEqual(
+          expect.objectContaining({
+            Authorization: "Bearer backend-session-token"
+          })
+        );
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ profile: profilePayload })
+        } as Response;
+      }
+
       return {
         ok: true,
         status: 200,
@@ -80,6 +144,9 @@ describe("mobile app shell", () => {
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
+    asyncStorageGetItemMock.mockResolvedValue(null);
+    asyncStorageSetItemMock.mockResolvedValue();
+    asyncStorageRemoveItemMock.mockResolvedValue();
     getGenericPasswordMock.mockResolvedValue(false);
     setGenericPasswordMock.mockResolvedValue({
       service: "ro.freshfulassistant.app-session",
@@ -104,10 +171,24 @@ describe("mobile app shell", () => {
       }
     });
     googleSignOutMock.mockResolvedValue(null);
+
+    Object.assign(globalThis, {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload(nextProfilePayload: ReturnType<typeof createProfilePayload> | null) {
+          profilePayload = nextProfilePayload;
+        },
+        setProfileError(nextProfileError: Error | null) {
+          profileError = nextProfileError;
+        }
+      }
+    });
   });
 
   afterEach(() => {
     fetchMock.mockReset();
+    asyncStorageGetItemMock.mockReset();
+    asyncStorageSetItemMock.mockReset();
+    asyncStorageRemoveItemMock.mockReset();
     getGenericPasswordMock.mockReset();
     setGenericPasswordMock.mockReset();
     resetGenericPasswordMock.mockReset();
@@ -115,6 +196,7 @@ describe("mobile app shell", () => {
     googleHasPlayServicesMock.mockReset();
     googleSignInMock.mockReset();
     googleSignOutMock.mockReset();
+    Reflect.deleteProperty(globalThis, "__TEST_PROFILE_STATE__");
   });
 
   test("reads API request timeout from bundled runtime config", () => {
@@ -131,7 +213,7 @@ describe("mobile app shell", () => {
     });
   });
 
-  test("signs in with Google, exchanges the token with the backend, and persists the backend session", async () => {
+  test("signs in with Google, shows the dashboard profile summary, and persists the backend session", async () => {
     const screen = render(<App />);
 
     await waitFor(() => {
@@ -141,10 +223,10 @@ describe("mobile app shell", () => {
     fireEvent.press(screen.getByText("Continue with Google"));
 
     await waitFor(() => {
-      expect(screen.getByText("Authenticated session")).toBeTruthy();
-      expect(screen.getByText("Ana Popescu")).toBeTruthy();
-      expect(screen.getByText("Live backend check")).toBeTruthy();
-      expect(screen.getByText(/3-day draft\s+with/i)).toBeTruthy();
+      expect(screen.getByText("Profile summary")).toBeTruthy();
+      expect(screen.getByText("Family household · 2 children")).toBeTruthy();
+      expect(screen.getByText("Plan next meals")).toBeTruthy();
+      expect(screen.getByText("Shopping lists soon")).toBeTruthy();
     });
 
     expect(googleConfigureMock).toHaveBeenCalledWith({
@@ -167,9 +249,45 @@ describe("mobile app shell", () => {
         service: "ro.freshfulassistant.app-session"
       })
     );
+
+    const profileCacheWrite = asyncStorageSetItemMock.mock.calls.find(
+      ([key]) => key === "ro.freshfulassistant.profile-cache:user-1"
+    );
+
+    expect(profileCacheWrite).toBeDefined();
+
+    const [, storedValue] = profileCacheWrite ?? [];
+    const storedRecord = JSON.parse(String(storedValue)) as {
+      summary: Record<string, unknown>;
+      cachedAt: string;
+    };
+
+    expect(storedRecord).toMatchObject({
+      summary: createCachedDashboardSummaryPayload().summary,
+      cachedAt: expect.any(String)
+    });
+    expect(Object.keys(storedRecord.summary).sort()).toEqual([
+      "budgetBand",
+      "cuisinePreferences",
+      "householdType",
+      "maxPrepTimeMinutes",
+      "numChildren",
+      "userId"
+    ]);
+    expect(storedRecord.summary).not.toHaveProperty("dietaryRestrictions");
+    expect(storedRecord.summary).not.toHaveProperty("goals");
+    expect(storedRecord.summary).not.toHaveProperty("allergies");
+    expect(storedRecord.summary).not.toHaveProperty("medicalFlags");
   });
 
-  test("restores the stored backend session on relaunch", async () => {
+  test("shows an empty dashboard state when no saved profile exists", async () => {
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setProfilePayload(null);
+
     getGenericPasswordMock.mockResolvedValue({
       service: "ro.freshfulassistant.app-session",
       storage: "mock-storage",
@@ -180,12 +298,83 @@ describe("mobile app shell", () => {
     const screen = render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("Authenticated session")).toBeTruthy();
-      expect(screen.getByText("Ana Popescu")).toBeTruthy();
+      expect(screen.getByText("Profile empty")).toBeTruthy();
+      expect(screen.getByText(/No household profile is stored yet/i)).toBeTruthy();
+    });
+
+    expect(asyncStorageRemoveItemMock).toHaveBeenCalledWith("ro.freshfulassistant.profile-cache:user-1");
+  });
+
+  test("prefers an empty state when the backend confirms the profile is null even if a cached summary exists", async () => {
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+    asyncStorageGetItemMock.mockResolvedValue(JSON.stringify(createCachedDashboardSummaryPayload()));
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setProfilePayload(null);
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Profile empty")).toBeTruthy();
+    });
+
+    expect(screen.queryByText("Family household · 2 children")).toBeNull();
+    expect(screen.queryByText(/Showing the last locally cached dashboard summary/i)).toBeNull();
+    expect(asyncStorageRemoveItemMock).toHaveBeenCalledWith("ro.freshfulassistant.profile-cache:user-1");
+  });
+
+  test("restores the stored backend session on relaunch and refreshes the profile from the backend", async () => {
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Live profile")).toBeTruthy();
+      expect(screen.getByText(/Cuisine preferences:\s*Romanian, Mediterranean/i)).toBeTruthy();
     });
 
     expect(googleSignInMock).not.toHaveBeenCalled();
     expect(setGenericPasswordMock).not.toHaveBeenCalled();
+  });
+
+  test("restores the session and falls back to the cached profile when the backend is unavailable", async () => {
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+    asyncStorageGetItemMock.mockResolvedValue(JSON.stringify(createCachedDashboardSummaryPayload()));
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setProfileError(new Error("Network request failed"));
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cached profile")).toBeTruthy();
+      expect(screen.getByText(/Showing the last locally cached dashboard summary/i)).toBeTruthy();
+      expect(screen.getByText("Family household · 2 children")).toBeTruthy();
+      expect(screen.getByText(/Cuisine preferences:\s*Romanian, Mediterranean/i)).toBeTruthy();
+    });
+
+    expect(googleSignInMock).not.toHaveBeenCalled();
   });
 
   test("logs out by clearing secure storage and returning to the welcome screen", async () => {
@@ -225,10 +414,10 @@ describe("mobile app shell", () => {
     const screen = render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("Tune plan preview")).toBeTruthy();
+      expect(screen.getByText("Plan next meals")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("Tune plan preview"));
+    fireEvent.press(screen.getByText("Plan next meals"));
     fireEvent.press(screen.getByText("5 days"));
     fireEvent.press(screen.getByText("snack"));
     fireEvent.press(screen.getByText("Back to dashboard"));

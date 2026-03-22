@@ -110,7 +110,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add mobile auth tests or mocked integration tests, then run root lint, typecheck, and test commands.
 	Review: Approved; reviewer confirmed the mobile app exchanges Google identity for the backend-issued session, persists only backend session state securely, restores it on relaunch, and handles logout without broadening into P4-S3 work.
 
-- [ ] P4-S3: Build the initial dashboard and local profile cache flow
+- [x] P4-S3: Build the initial dashboard and local profile cache flow
 	Owner: Coder
 	Depends on: P3-S3, P4-S2
 	Acceptance: The authenticated app shows a home dashboard with profile summary and placeholder actions for planning and shopping lists, and it can cache the latest profile locally using the chosen secure or local storage split.
@@ -250,6 +250,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - The next actionable step is P2-S3.
+
 
 
 

@@ -1,4 +1,4 @@
-import { errorPayloadSchema } from "@freshful/contracts";
+import { errorPayloadSchema, householdProfileSchema, type HouseholdProfile } from "@freshful/contracts";
 import { z } from "zod";
 
 import type { MobileConfig } from "../../config";
@@ -30,12 +30,19 @@ const assistantHealthSchema = z
   })
   .strict();
 
+const profileResponseSchema = z
+  .object({
+    profile: householdProfileSchema.nullable()
+  })
+  .strict();
+
 export type AssistantHealth = z.infer<typeof assistantHealthSchema>;
 
 export interface ApiClient {
   config: MobileConfig;
   getAssistantHealth(): Promise<AssistantHealth>;
   exchangeGoogleIdToken(idToken: string): Promise<AuthSessionRecord>;
+  getProfile(accessToken: string): Promise<HouseholdProfile | null>;
 }
 
 function createRequestUrl(baseUrl: string, pathname: string): string {
@@ -106,6 +113,21 @@ export function createApiClient(config: MobileConfig): ApiClient {
         },
         authSessionRecordSchema
       );
+    },
+    async getProfile(accessToken) {
+      const response = await requestJson(
+        config,
+        "profile",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        },
+        profileResponseSchema
+      );
+
+      return response.profile;
     }
   };
 }

@@ -9,6 +9,7 @@ import { createGoogleSignInClient } from "./auth/google-client";
 import { createAuthSessionStorage } from "./auth/session-storage";
 import { createAuthService } from "./auth/service";
 import { getBundledMobileConfig } from "./config/runtime";
+import { createProfileCacheStorage } from "./profile/cache-storage";
 import { AppRuntimeContext } from "./runtime/context";
 import { RootNavigator } from "./navigation/RootNavigator";
 import { createAppQueryClient } from "./query/client";
@@ -21,7 +22,8 @@ export function AppShell(): React.JSX.Element {
 
     return {
       config,
-      apiClient: createApiClient(config)
+      apiClient: createApiClient(config),
+      profileCacheStorage: createProfileCacheStorage()
     };
   });
   const [authService] = React.useState(() =>
