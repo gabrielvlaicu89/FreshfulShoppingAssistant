@@ -1,0 +1,14 @@
+{
+  "name": "@freshful/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile workspace scaffold for the Freshful Shopping Assistant Android client.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --project tsconfig.json --pretty false --noEmit"
+  },
+  "dependencies": {
+    "@freshful/contracts": "0.1.0"
+  }
+}

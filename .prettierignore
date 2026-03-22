@@ -1,0 +1,7 @@
+node_modules/
+.ai/logs/
+apps/*/dist/
+packages/*/dist/
+packages/contracts/src/*.d.ts
+packages/contracts/src/*.js
+package-lock.json
