@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../auth/context";
 import { BootstrapScreen } from "../screens/BootstrapScreen";
 import { DashboardScreen } from "../screens/DashboardScreen";
+import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { PlannerPreviewScreen } from "../screens/PlannerPreviewScreen";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { palette } from "../theme/tokens";
@@ -12,6 +13,7 @@ export type RootStackParamList = {
   Bootstrap: undefined;
   Welcome: undefined;
   Dashboard: undefined;
+  Onboarding: undefined;
   PlannerPreview: undefined;
 };
 
@@ -40,6 +42,7 @@ export function RootNavigator(): React.JSX.Element {
       {auth.status === "bootstrapping" ? <Stack.Screen name="Bootstrap" component={BootstrapScreen} options={{ headerShown: false }} /> : null}
       {auth.status === "signed-out" ? <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} /> : null}
       {auth.status === "signed-in" ? <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: "Freshful Assistant" }} /> : null}
+      {auth.status === "signed-in" ? <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ title: "Household Profile" }} /> : null}
       {auth.status === "signed-in" ? <Stack.Screen name="PlannerPreview" component={PlannerPreviewScreen} options={{ title: "Plan Preview" }} /> : null}
     </Stack.Navigator>
   );

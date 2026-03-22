@@ -109,8 +109,11 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
           <View style={styles.stack}>
             <Badge label="Profile empty" tone="warning" />
             <AppText variant="bodyMuted">
-              No household profile is stored yet. P5 onboarding will populate this summary once profile capture is available.
+              No household profile is stored yet. Start the onboarding chat to capture your household preferences before generating plans.
             </AppText>
+            <View style={styles.actionsRow}>
+              <Button label="Start AI onboarding" onPress={() => navigation.navigate("Onboarding")} />
+            </View>
           </View>
         ) : null}
         {profileSummary.isError ? (
@@ -119,15 +122,22 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
             <AppText variant="bodyMuted">The backend profile could not be loaded and no cached snapshot was available.</AppText>
           </View>
         ) : null}
+        {profile ? (
+          <View style={styles.actionsRow}>
+            <Button label="Review or revise profile" variant="ghost" onPress={() => navigation.navigate("Onboarding")} />
+          </View>
+        ) : null}
       </Card>
 
       <Card>
         <AppText variant="title">Planning</AppText>
         <AppText variant="bodyMuted">
-          {formatDraftLabel(planDays)} with {includedMeals.join(", ")}. This is still a local planning stub until meal plan generation lands.
+          {profile
+            ? `${formatDraftLabel(planDays)} with ${includedMeals.join(", ")}. This is still a local planning stub until meal plan generation lands.`
+            : "Finish onboarding first so future plans can use your captured household profile."}
         </AppText>
         <View style={styles.actionsRow}>
-          <Button label="Plan next meals" onPress={() => navigation.navigate("PlannerPreview")} />
+          <Button label={profile ? "Plan next meals" : "Finish onboarding first"} onPress={() => navigation.navigate(profile ? "PlannerPreview" : "Onboarding")} />
         </View>
       </Card>
 

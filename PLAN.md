@@ -133,7 +133,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add integration tests with mocked Anthropic responses for happy-path, partial-profile, and invalid-LLM-output cases; run root typecheck and test commands.
 	Review: Required; reviewer verifies chat state, schema validation, and profile persistence behavior.
 
-- [ ] P5-S3: Build the mobile onboarding chat and profile confirmation flow
+- [x] P5-S3: Build the mobile onboarding chat and profile confirmation flow
 	Owner: Coder
 	Depends on: P5-S2, P4-S3
 	Acceptance: The mobile app presents the onboarding chat, streams or polls assistant responses appropriately, shows the evolving structured profile, and lets the user confirm or revise the captured household data.
@@ -235,7 +235,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 ## Review Summary
 
 - Overall status: In progress.
-- Last reviewed item: P2-S2.
+- Last reviewed item: P5-S3.
 - Last review outcome: approved.
 - Review before completion: Required for every step, per .ai/orchestrator.config.json.
 - Maximum coder retries from tester: 2.
@@ -249,7 +249,9 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P1-S3 is complete and approved; root lint, test, format policy, env bootstrap, and startup commands are now defined for the scaffolded monorepo.
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
-- The next actionable step is P2-S3.
+- P5-S3 is complete and approved; apps/mobile now provides the signed-in onboarding chat and profile confirmation flow, dashboard entry points for empty and existing profiles, structured profile review with explicit allergy notes, and regression coverage for loading, retry, and save/revise race handling.
+- The next actionable step is P6-S1.
+
 
 
 

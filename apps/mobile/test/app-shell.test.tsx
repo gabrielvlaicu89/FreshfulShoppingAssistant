@@ -85,6 +85,87 @@ function createProfilePayload() {
   };
 }
 
+function createEditableProfilePayload() {
+  return createOnboardingProfileWritePayload();
+}
+
+function createOnboardingResponse(overrides: {
+  assistantMessage?: string;
+  structuredProfile?: {
+    status?: "complete" | "incomplete" | "invalid";
+    profile?: Record<string, unknown> | null;
+    missingFields?: string[];
+    parseFailureReason?: "incomplete" | "missing_json" | "invalid_json" | "schema_mismatch" | null;
+    persisted?: boolean;
+  };
+} = {}) {
+  const assistantMessage = overrides.assistantMessage ?? "Perfect. What budget and prep time should I respect?";
+
+  return {
+    transcript: {
+      id: "transcript-1",
+      messages: [
+        {
+          id: "message-user-1",
+          role: "user",
+          content: "We are a vegetarian family with two kids.",
+          createdAt: "2026-03-22T10:00:00.000Z"
+        },
+        {
+          id: "message-assistant-1",
+          role: "assistant",
+          content: assistantMessage,
+          createdAt: "2026-03-22T10:00:05.000Z"
+        }
+      ]
+    },
+    assistantMessage: {
+      id: "message-assistant-1",
+      role: "assistant",
+      content: assistantMessage,
+      createdAt: "2026-03-22T10:00:05.000Z"
+    },
+    structuredProfile: {
+      status: overrides.structuredProfile?.status ?? "complete",
+      profile: overrides.structuredProfile?.profile ?? createEditableProfilePayload(),
+      missingFields: overrides.structuredProfile?.missingFields ?? [],
+      parseFailureReason: overrides.structuredProfile?.parseFailureReason ?? null,
+      persisted: overrides.structuredProfile?.persisted ?? true
+    }
+  };
+}
+
+function createOnboardingProfileWritePayload() {
+  return {
+    householdType: "family",
+    numChildren: 2,
+    dietaryRestrictions: ["vegetarian", "gluten-free"],
+    allergies: {
+      normalized: ["dairy"],
+      freeText: ["kiwi"]
+    },
+    medicalFlags: {
+      diabetes: false,
+      hypertension: false
+    },
+    goals: ["maintenance"],
+    cuisinePreferences: ["Romanian", "Mediterranean"],
+    favoriteIngredients: ["tomatoes", "lentils"],
+    dislikedIngredients: ["olives"],
+    budgetBand: "medium",
+    maxPrepTimeMinutes: 35,
+    cookingSkill: "intermediate"
+  };
+}
+
+function toStoredProfilePayload(profileWritePayload: ReturnType<typeof createOnboardingProfileWritePayload>) {
+  return {
+    ...profileWritePayload,
+    userId: "user-1",
+    rawChatHistoryId: "transcript-confirmed"
+  };
+}
+
 function createCachedDashboardSummaryPayload() {
   return {
     summary: {
@@ -104,6 +185,10 @@ describe("mobile app shell", () => {
     resetAssistantShellStore();
     let profilePayload: ReturnType<typeof createProfilePayload> | null = createProfilePayload();
     let profileError: Error | null = null;
+    let profileUpdateDelay: Promise<void> | null = null;
+    let onboardingError: Error | null = null;
+    let onboardingResponses = [createOnboardingResponse()];
+    let onboardingRequestDelay: Promise<void> | null = null;
 
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
@@ -119,6 +204,29 @@ describe("mobile app shell", () => {
       }
 
       if (url.includes("/profile")) {
+        if (init?.method === "PUT") {
+          expect(init?.headers).toEqual(
+            expect.objectContaining({
+              Authorization: "Bearer backend-session-token",
+              "Content-Type": "application/json"
+            })
+          );
+
+          if (profileUpdateDelay) {
+            await profileUpdateDelay;
+            profileUpdateDelay = null;
+          }
+
+          const parsedBody = JSON.parse(String(init?.body ?? "{}")) as ReturnType<typeof createOnboardingProfileWritePayload>;
+          profilePayload = toStoredProfilePayload(parsedBody);
+
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ profile: profilePayload })
+          } as Response;
+        }
+
         expect(init?.headers).toEqual(
           expect.objectContaining({
             Authorization: "Bearer backend-session-token"
@@ -133,6 +241,33 @@ describe("mobile app shell", () => {
           ok: true,
           status: 200,
           json: async () => ({ profile: profilePayload })
+        } as Response;
+      }
+
+      if (url.includes("/ai/onboarding-chat")) {
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toEqual(
+          expect.objectContaining({
+            Authorization: "Bearer backend-session-token",
+            "Content-Type": "application/json"
+          })
+        );
+
+        if (onboardingRequestDelay) {
+          await onboardingRequestDelay;
+          onboardingRequestDelay = null;
+        }
+
+        if (onboardingError) {
+          throw onboardingError;
+        }
+
+        const response = onboardingResponses.shift() ?? createOnboardingResponse();
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => response
         } as Response;
       }
 
@@ -179,6 +314,18 @@ describe("mobile app shell", () => {
         },
         setProfileError(nextProfileError: Error | null) {
           profileError = nextProfileError;
+        },
+        setProfileUpdateDelay(nextDelay: Promise<void> | null) {
+          profileUpdateDelay = nextDelay;
+        },
+        setOnboardingError(nextOnboardingError: Error | null) {
+          onboardingError = nextOnboardingError;
+        },
+        setOnboardingResponses(nextOnboardingResponses: Array<ReturnType<typeof createOnboardingResponse>>) {
+          onboardingResponses = [...nextOnboardingResponses];
+        },
+        setOnboardingRequestDelay(nextDelay: Promise<void> | null) {
+          onboardingRequestDelay = nextDelay;
         }
       }
     });
@@ -285,6 +432,10 @@ describe("mobile app shell", () => {
       __TEST_PROFILE_STATE__: {
         setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
         setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
       };
     }).__TEST_PROFILE_STATE__.setProfilePayload(null);
 
@@ -299,7 +450,8 @@ describe("mobile app shell", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Profile empty")).toBeTruthy();
-      expect(screen.getByText(/No household profile is stored yet/i)).toBeTruthy();
+      expect(screen.getByText(/Start the onboarding chat/i)).toBeTruthy();
+      expect(screen.getByText("Start AI onboarding")).toBeTruthy();
     });
 
     expect(asyncStorageRemoveItemMock).toHaveBeenCalledWith("ro.freshfulassistant.profile-cache:user-1");
@@ -426,5 +578,305 @@ describe("mobile app shell", () => {
       expect(screen.getByText(/5-day draft\s+with/i)).toBeTruthy();
       expect(screen.getByText(/breakfast, lunch, dinner, snack/i)).toBeTruthy();
     });
+  });
+
+  test("guides signed-in users without a profile through onboarding chat, loading state, and confirmation", async () => {
+    let resolveOnboardingDelay: () => void = () => {};
+    const onboardingDelay = new Promise<void>((resolve) => {
+      resolveOnboardingDelay = resolve;
+    });
+
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+      __RESOLVE_ONBOARDING_DELAY__: () => void;
+    }).__TEST_PROFILE_STATE__.setProfilePayload(null);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setOnboardingResponses([
+      createOnboardingResponse({
+        assistantMessage: "Perfect. I have enough detail to draft your household profile.",
+        structuredProfile: {
+          status: "complete",
+          profile: createOnboardingProfileWritePayload(),
+          missingFields: [],
+          parseFailureReason: null,
+          persisted: true
+        }
+      })
+    ]);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setOnboardingRequestDelay(onboardingDelay);
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Start AI onboarding")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Start AI onboarding"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Onboarding chat")).toBeTruthy();
+      expect(screen.getByPlaceholderText("Describe your household or ask for a correction.")).toBeTruthy();
+    });
+
+    fireEvent.changeText(screen.getByTestId("onboarding-composer-input"), "We are a vegetarian family with two kids.");
+    fireEvent.press(screen.getByText("Send message"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Assistant is updating your household profile.")).toBeTruthy();
+    });
+
+    resolveOnboardingDelay();
+
+    await waitFor(() => {
+      expect(screen.getByText("Perfect. I have enough detail to draft your household profile.")).toBeTruthy();
+      expect(screen.getByText("Ready to confirm")).toBeTruthy();
+      expect(screen.getByText("Known: dairy · Notes: kiwi")).toBeTruthy();
+      expect(screen.getByText("Confirm profile")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Confirm profile"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Live profile")).toBeTruthy();
+      expect(screen.getByText("Family household · 2 children")).toBeTruthy();
+      expect(screen.getByText("Review or revise profile")).toBeTruthy();
+    });
+  });
+
+  test("shows onboarding chat recovery controls after an assistant request fails and retries successfully", async () => {
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setProfilePayload(null);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setOnboardingError(new Error("Network request failed"));
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Start AI onboarding")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Start AI onboarding"));
+    fireEvent.changeText(screen.getByTestId("onboarding-composer-input"), "Please capture our dairy allergy.");
+    fireEvent.press(screen.getByText("Send message"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Chat unavailable")).toBeTruthy();
+      expect(screen.getByText("Retry last message")).toBeTruthy();
+    });
+
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setOnboardingError(null);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setOnboardingResponses([
+      createOnboardingResponse({
+        assistantMessage: "Got it. I captured the allergy and your prep limit.",
+        structuredProfile: {
+          status: "incomplete",
+          profile: {
+            householdType: "family",
+            allergies: {
+              normalized: ["dairy"],
+              freeText: []
+            },
+            maxPrepTimeMinutes: 30
+          },
+          missingFields: ["goals", "budgetBand"],
+          parseFailureReason: "incomplete",
+          persisted: false
+        }
+      })
+    ]);
+
+    fireEvent.press(screen.getByText("Retry last message"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Got it. I captured the allergy and your prep limit.")).toBeTruthy();
+      expect(screen.getByText("Profile in progress")).toBeTruthy();
+      expect(screen.getByText(/Still missing: goals, budgetBand/i)).toBeTruthy();
+    });
+  });
+
+  test("lets signed-in users review or revise an existing profile from the dashboard", async () => {
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Review or revise profile")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Review or revise profile"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Profile review")).toBeTruthy();
+      expect(screen.getByText("Family household · 2 children")).toBeTruthy();
+      expect(screen.getByText("Known: dairy · Notes: kiwi")).toBeTruthy();
+      expect(screen.getByText("Save profile")).toBeTruthy();
+    });
+  });
+
+  test("does not submit a revision while save profile is still pending", async () => {
+    let resolveProfileUpdateDelay: () => void = () => {};
+    const profileUpdateDelay = new Promise<void>((resolve) => {
+      resolveProfileUpdateDelay = resolve;
+    });
+
+    getGenericPasswordMock.mockResolvedValue({
+      service: "ro.freshfulassistant.app-session",
+      storage: "mock-storage",
+      username: "backend-session",
+      password: JSON.stringify(createAuthPayload())
+    } as unknown as GenericPasswordResult);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setOnboardingResponses([
+      createOnboardingResponse({
+        assistantMessage: "I updated the allergy notes to include kiwi.",
+        structuredProfile: {
+          status: "complete",
+          profile: createOnboardingProfileWritePayload(),
+          missingFields: [],
+          parseFailureReason: null,
+          persisted: true
+        }
+      })
+    ]);
+    (globalThis as typeof globalThis & {
+      __TEST_PROFILE_STATE__: {
+        setProfilePayload: (payload: ReturnType<typeof createProfilePayload> | null) => void;
+        setProfileError: (error: Error | null) => void;
+        setProfileUpdateDelay: (delay: Promise<void> | null) => void;
+        setOnboardingError: (error: Error | null) => void;
+        setOnboardingResponses: (responses: Array<ReturnType<typeof createOnboardingResponse>>) => void;
+        setOnboardingRequestDelay: (delay: Promise<void> | null) => void;
+      };
+    }).__TEST_PROFILE_STATE__.setProfileUpdateDelay(profileUpdateDelay);
+
+    const screen = render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Review or revise profile")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Review or revise profile"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Save profile")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Saving profile..." })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+      expect(screen.getByTestId("onboarding-composer-input").props.editable).toBe(false);
+    });
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) => String(url).includes("/profile") && init?.method === "PUT"
+      )
+    ).toHaveLength(1);
+
+    fireEvent.changeText(screen.getByTestId("onboarding-composer-input"), "Please add kiwi to the allergy notes.");
+    fireEvent.press(screen.getByRole("button", { name: "Send message" }));
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) => String(url).includes("/ai/onboarding-chat") && init?.method === "POST"
+      )
+    ).toHaveLength(0);
+
+    resolveProfileUpdateDelay();
+
+    await waitFor(() => {
+      expect(screen.getByText("Live profile")).toBeTruthy();
+      expect(screen.getByText("Review or revise profile")).toBeTruthy();
+    });
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) => String(url).includes("/ai/onboarding-chat") && init?.method === "POST"
+      )
+    ).toHaveLength(0);
   });
 });
