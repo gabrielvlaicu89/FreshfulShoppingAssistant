@@ -1,6 +1,8 @@
+import { errorPayloadSchema } from "@freshful/contracts";
 import { z } from "zod";
 
 import type { MobileConfig } from "../../config";
+import { authSessionRecordSchema, type AuthSessionRecord } from "../auth/contracts";
 
 const apiServiceStatusSchema = z
   .object({
@@ -33,37 +35,77 @@ export type AssistantHealth = z.infer<typeof assistantHealthSchema>;
 export interface ApiClient {
   config: MobileConfig;
   getAssistantHealth(): Promise<AssistantHealth>;
+  exchangeGoogleIdToken(idToken: string): Promise<AuthSessionRecord>;
 }
 
 function createRequestUrl(baseUrl: string, pathname: string): string {
   return new URL(pathname, `${baseUrl.replace(/\/+$/u, "")}/`).toString();
 }
 
+async function parseErrorMessage(response: Response): Promise<string> {
+  try {
+    const payload = errorPayloadSchema.safeParse(await response.json());
+
+    if (payload.success) {
+      return payload.data.message;
+    }
+  } catch {
+    return `Request failed with status ${response.status}.`;
+  }
+
+  return `Request failed with status ${response.status}.`;
+}
+
+async function requestJson<TOutput>(
+  config: MobileConfig,
+  pathname: string,
+  init: RequestInit,
+  schema: z.ZodType<TOutput>
+): Promise<TOutput> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, config.network.requestTimeoutMs);
+
+  try {
+    const response = await fetch(createRequestUrl(config.apiBaseUrl, pathname), {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        ...(init.headers ?? {})
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response));
+    }
+
+    return schema.parse(await response.json());
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function createApiClient(config: MobileConfig): ApiClient {
   return {
     config,
     async getAssistantHealth() {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => {
-        controller.abort();
-      }, config.network.requestTimeoutMs);
-
-      try {
-        const response = await fetch(createRequestUrl(config.apiBaseUrl, "health?details=summary"), {
-          signal: controller.signal,
+      return requestJson(config, "health?details=summary", { method: "GET" }, assistantHealthSchema);
+    },
+    async exchangeGoogleIdToken(idToken) {
+      return requestJson(
+        config,
+        "auth/google",
+        {
+          method: "POST",
           headers: {
-            Accept: "application/json"
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Assistant health request failed with status ${response.status}.`);
-        }
-
-        return assistantHealthSchema.parse(await response.json());
-      } finally {
-        clearTimeout(timeout);
-      }
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ idToken })
+        },
+        authSessionRecordSchema
+      );
     }
   };
 }

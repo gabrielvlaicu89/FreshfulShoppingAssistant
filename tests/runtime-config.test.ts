@@ -83,6 +83,7 @@ test("getMobileConfig parses injected runtime values without filesystem access",
   const config = getMobileConfig({
     API_BASE_URL: "http://10.0.2.2:3000",
     GOOGLE_ANDROID_CLIENT_ID: "test-android-client.apps.googleusercontent.com",
+    GOOGLE_WEB_CLIENT_ID: "test-web-client.apps.googleusercontent.com",
     API_REQUEST_TIMEOUT_MS: "12000"
   });
 
@@ -90,7 +91,8 @@ test("getMobileConfig parses injected runtime values without filesystem access",
     appEnv: "development",
     apiBaseUrl: "http://10.0.2.2:3000",
     google: {
-      androidClientId: "test-android-client.apps.googleusercontent.com"
+      androidClientId: "test-android-client.apps.googleusercontent.com",
+      webClientId: "test-web-client.apps.googleusercontent.com"
     },
     network: {
       requestTimeoutMs: 12000
@@ -115,5 +117,11 @@ test("env example files document the required backend and mobile keys", () => {
     "FRESHFUL_SEARCH_PATH",
     "FRESHFUL_REQUEST_TIMEOUT_MS"
   ]);
-  assert.deepEqual(mobileEnvKeys, ["APP_ENV", "API_BASE_URL", "GOOGLE_ANDROID_CLIENT_ID", "API_REQUEST_TIMEOUT_MS"]);
+  assert.deepEqual(mobileEnvKeys, [
+    "APP_ENV",
+    "API_BASE_URL",
+    "GOOGLE_ANDROID_CLIENT_ID",
+    "GOOGLE_WEB_CLIENT_ID",
+    "API_REQUEST_TIMEOUT_MS"
+  ]);
 });

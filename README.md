@@ -74,6 +74,7 @@ This repo keeps runtime configuration separated by workspace:
 
 - `apps/api/.env` is for backend-only settings, including `DATABASE_URL`, `APP_SESSION_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `ANTHROPIC_API_KEY`, and Freshful integration values.
 - `apps/mobile/.env` is limited to safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, and request timeout settings used to inject mobile runtime config.
+- `apps/mobile/.env` is limited to safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`, and request timeout settings used to inject mobile runtime config.
 
 The checked-in `.env.example` files define the required keys without containing live credentials. `npm run env:bootstrap` copies those templates locally if the real `.env` files do not exist yet. Keep actual secrets in untracked local env files for development and in your deployment secret manager for shared environments.
 
@@ -125,7 +126,7 @@ The repo still uses the plan-first orchestration flow, but it now operates on a 
 
 ## What Is Still Placeholder
 
-- The mobile workspace now contains the real React Native shell, but authenticated Google Sign-In and secure session restoration are still pending for `P4-S2`.
+- The mobile workspace now contains the real React Native shell with Google Sign-In, backend session exchange, secure session restoration, and logout handling; local profile caching remains pending for `P4-S3`.
 - The API workspace now has the HTTP foundation, Google token verification, app session issuance, and protected profile endpoints, but it does not yet include AI orchestration or the Freshful adapter.
 
 ## Validation Baseline

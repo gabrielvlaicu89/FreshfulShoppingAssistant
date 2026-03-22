@@ -4,6 +4,10 @@ import { NavigationContainer } from "@react-navigation/native";
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import { createApiClient } from "./api/client";
+import { AuthProvider } from "./auth/context";
+import { createGoogleSignInClient } from "./auth/google-client";
+import { createAuthSessionStorage } from "./auth/session-storage";
+import { createAuthService } from "./auth/service";
 import { getBundledMobileConfig } from "./config/runtime";
 import { AppRuntimeContext } from "./runtime/context";
 import { RootNavigator } from "./navigation/RootNavigator";
@@ -20,15 +24,24 @@ export function AppShell(): React.JSX.Element {
       apiClient: createApiClient(config)
     };
   });
+  const [authService] = React.useState(() =>
+    createAuthService({
+      apiClient: runtime.apiClient,
+      googleClient: createGoogleSignInClient(runtime.config),
+      sessionStorage: createAuthSessionStorage()
+    })
+  );
   const [queryClient] = React.useState(createAppQueryClient);
 
   return (
     <AppRuntimeContext.Provider value={runtime}>
       <QueryClientProvider client={queryClient}>
-        <NavigationContainer theme={navigationTheme}>
-          <StatusBar barStyle="dark-content" backgroundColor={palette.canvas} />
-          <RootNavigator />
-        </NavigationContainer>
+        <AuthProvider authService={authService}>
+          <NavigationContainer theme={navigationTheme}>
+            <StatusBar barStyle="dark-content" backgroundColor={palette.canvas} />
+            <RootNavigator />
+          </NavigationContainer>
+        </AuthProvider>
       </QueryClientProvider>
     </AppRuntimeContext.Provider>
   );

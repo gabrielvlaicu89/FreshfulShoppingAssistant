@@ -2,6 +2,7 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { useAuth } from "../auth/context";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useAssistantHealthQuery } from "../queries/assistant-health";
 import { useAssistantShellStore } from "../state/app-store";
@@ -21,7 +22,7 @@ function formatDraftLabel(planDays: number): string {
 export function DashboardScreen({ navigation }: Props): React.JSX.Element {
   const planDays = useAssistantShellStore((state) => state.planDays);
   const includedMeals = useAssistantShellStore((state) => state.includedMeals);
-  const welcomeCompleted = useAssistantShellStore((state) => state.hasSeenWelcome);
+  const auth = useAuth();
   const healthQuery = useAssistantHealthQuery();
 
   return (
@@ -29,13 +30,22 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
       <Card tone="accent">
         <View style={styles.heroRow}>
           <View style={styles.heroCopy}>
-            <AppText variant="eyebrow">Android shell</AppText>
-            <AppText variant="heading">Freshful&apos;s authenticated flow lands here next.</AppText>
+            <AppText variant="eyebrow">Authenticated shell</AppText>
+            <AppText variant="heading">Signed in and ready for the next product slice.</AppText>
             <AppText variant="bodyMuted">
-              The shell already owns routing, config bootstrapping, server-state wiring, and cross-screen draft state.
+              Session bootstrap now restores from secure storage, and the mobile app is using the backend-issued bearer token boundary described by the API.
             </AppText>
           </View>
-          <Badge label={welcomeCompleted ? "Ready for P4-S2" : "Welcome pending"} tone="success" />
+          <Badge label={auth.user?.email ?? "Signed in"} tone="success" />
+        </View>
+      </Card>
+
+      <Card>
+        <AppText variant="title">Authenticated session</AppText>
+        <AppText variant="bodyMuted">{auth.user?.displayName ?? auth.user?.email ?? "Freshful user"}</AppText>
+        <AppText variant="bodyMuted">Session expires at {auth.session ? new Date(auth.session.expiresAt).toLocaleString() : "unknown"}.</AppText>
+        <View style={styles.actionsRow}>
+          <Button label={auth.isBusy ? "Signing out..." : "Log out"} variant="ghost" disabled={auth.isBusy} onPress={() => void auth.signOut()} />
         </View>
       </Card>
 
@@ -79,11 +89,10 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
       <Card>
         <AppText variant="title">Current shared draft</AppText>
         <AppText variant="bodyMuted">
-          {formatDraftLabel(planDays)} with {includedMeals.join(", ")}. This state is backed by Zustand and reused across screens.
+          {formatDraftLabel(planDays)} with {includedMeals.join(", ")}. This state is still intentionally local while P4-S3 handles dashboard data and profile caching.
         </AppText>
         <View style={styles.actionsRow}>
           <Button label="Tune plan preview" onPress={() => navigation.navigate("PlannerPreview")} />
-          <Button label="Replay welcome" variant="ghost" onPress={() => navigation.replace("Welcome")} />
         </View>
       </Card>
     </Screen>

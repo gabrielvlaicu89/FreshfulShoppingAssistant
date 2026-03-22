@@ -120,3 +120,18 @@ jest.mock("@react-navigation/native-stack", () => {
     }
   };
 });
+
+jest.mock("@react-native-google-signin/google-signin", () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(),
+    signIn: jest.fn(),
+    signOut: jest.fn()
+  }
+}));
+
+jest.mock("react-native-keychain", () => ({
+  getGenericPassword: jest.fn(),
+  setGenericPassword: jest.fn(),
+  resetGenericPassword: jest.fn()
+}));

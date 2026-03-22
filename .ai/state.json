@@ -1,13 +1,18 @@
 {
   "planningStatus": "in-progress",
-  "currentStepId": "P4-S2",
-  "lastCompletedItemId": "P4-S1",
-  "lastReviewedItemId": "P4-S1",
+  "currentStepId": "P4-S3",
+  "lastCompletedItemId": "P4-S2",
+  "lastReviewedItemId": "P4-S2",
   "lastReviewOutcome": "approved",
   "lastCommitMessage": null,
   "lastPushAttempt": null,
   "phaseCommits": [],
   "recentNotes": [
+    {
+      "timestamp": "2026-03-22T17:56:06.591Z",
+      "stepId": "P4-S2",
+      "note": "P4-S2 accepted after mobile auth validation and review; apps/mobile now supports Google Sign-In, backend token exchange, secure backend-session persistence, restore on relaunch, and logout without treating Google tokens as durable app auth state."
+    },
     {
       "timestamp": "2026-03-22T17:32:12.488Z",
       "stepId": "P4-S1",
@@ -52,17 +57,12 @@
       "timestamp": "2026-03-22T13:26:08.692Z",
       "stepId": "P1-S2",
       "note": "P1-S2 accepted after scaffold validation and review; npm workspaces now cover apps/api, apps/mobile, and packages/contracts with runtime-consumable shared package wiring."
-    },
-    {
-      "timestamp": "2026-03-22T12:58:26.212Z",
-      "stepId": "P1-S1",
-      "note": "P1-S1 accepted after coder implementation, tester validation, and reviewer approval; architecture stack note added in docs/architecture/p1-s1-workspace-stack.md."
     }
   ],
   "lastRun": {
-    "timestamp": "2026-03-22T17:32:12.488Z",
+    "timestamp": "2026-03-22T17:56:06.591Z",
     "agent": "orchestrator",
-    "action": "update-progress:P4-S1",
+    "action": "update-progress:P4-S2",
     "status": "done"
   }
 }

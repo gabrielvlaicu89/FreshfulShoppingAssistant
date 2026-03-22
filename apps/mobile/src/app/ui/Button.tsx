@@ -11,16 +11,25 @@ export interface ButtonProps {
   onPress(): void;
   variant?: Variant;
   style?: ViewStyle;
+  disabled?: boolean;
 }
 
-export function Button({ label, onPress, variant = "solid", style }: ButtonProps): React.JSX.Element {
+export function Button({ label, onPress, variant = "solid", style, disabled = false }: ButtonProps): React.JSX.Element {
   const solid = variant === "solid";
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.base, solid ? styles.solid : styles.ghost, pressed ? styles.pressed : null, style]}
+      style={({ pressed }) => [
+        styles.base,
+        solid ? styles.solid : styles.ghost,
+        pressed && !disabled ? styles.pressed : null,
+        disabled ? styles.disabled : null,
+        style
+      ]}
     >
       <AppText variant="button" style={solid ? styles.solidText : styles.ghostText}>
         {label}
@@ -49,6 +58,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.88,
     transform: [{ scale: 0.985 }]
+  },
+  disabled: {
+    opacity: 0.58
   },
   solidText: {
     color: palette.paper
