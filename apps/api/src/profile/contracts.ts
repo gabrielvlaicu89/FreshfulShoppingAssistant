@@ -1,4 +1,5 @@
 import {
+  allergyValues,
   allergiesSchema,
   budgetBandValues,
   cookingSkillValues,
@@ -30,6 +31,29 @@ export const profileWriteSchema = z
   .strict();
 
 export type ProfileWriteInput = z.infer<typeof profileWriteSchema>;
+
+const partialAllergiesSchema = z
+  .object({
+    normalized: z.array(z.enum(allergyValues)).optional(),
+    freeText: z.array(trimmedStringSchema).optional()
+  })
+  .strict();
+
+const partialMedicalFlagsSchema = z
+  .object({
+    diabetes: z.boolean().optional(),
+    hypertension: z.boolean().optional()
+  })
+  .strict();
+
+export const partialProfileWriteSchema = profileWriteSchema
+  .extend({
+    allergies: partialAllergiesSchema.optional(),
+    medicalFlags: partialMedicalFlagsSchema.optional()
+  })
+  .partial();
+
+export type PartialProfileWriteInput = z.infer<typeof partialProfileWriteSchema>;
 
 export const profileResponseSchema = z
   .object({

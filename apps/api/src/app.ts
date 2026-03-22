@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerO
 import { z } from "zod";
 
 import { googleAuthRequestSchema, googleAuthResponseSchema } from "./auth/contracts.js";
+import { createClaudeService, type ClaudeService } from "./ai/service.js";
 import {
   createAuthServiceUnavailableError,
   createInvalidAppSessionError,
@@ -147,6 +148,10 @@ function isProfileService(value: unknown): value is ProfileService {
   return typeof value === "object" && value !== null && "getProfile" in value && "upsertProfile" in value;
 }
 
+function isClaudeService(value: unknown): value is ClaudeService {
+  return typeof value === "object" && value !== null && "createOnboardingReply" in value && "extractProfile" in value;
+}
+
 function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
   const headerValue = Array.isArray(authorizationHeader) ? authorizationHeader[0] : authorizationHeader;
 
@@ -179,6 +184,13 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
           })
   });
   let ownedDatabase: ReturnType<typeof createApiDatabase> | undefined;
+  const aiImplementation = isClaudeService(options.services?.ai?.implementation)
+    ? options.services.ai.implementation
+    : config.anthropic
+      ? createClaudeService({
+          config: config.anthropic
+        })
+      : null;
   const authImplementation = isAuthService(options.services?.auth?.implementation)
     ? options.services.auth.implementation
     : createAuthService({
@@ -223,6 +235,11 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     config,
     services: createApiServices({
       ...options.services,
+      ai: options.services?.ai ?? {
+        name: "ai",
+        status: aiImplementation ? "ready" : "pending",
+        implementation: aiImplementation
+      },
       auth: options.services?.auth ?? {
         name: "auth",
         status: "ready",

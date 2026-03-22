@@ -37,6 +37,16 @@ test("getApiConfig loads validated backend settings from an env file", () => {
       "APP_SESSION_TTL_SECONDS=7200",
       "GOOGLE_WEB_CLIENT_ID=test-web-client.apps.googleusercontent.com",
       "ANTHROPIC_API_KEY=test-anthropic-key",
+      "ANTHROPIC_BASE_URL=https://api.anthropic.com",
+      "ANTHROPIC_API_VERSION=2023-06-01",
+      "ANTHROPIC_MODEL_HAIKU=claude-3-5-haiku-latest",
+      "ANTHROPIC_MODEL_SONNET=claude-3-7-sonnet-latest",
+      "ANTHROPIC_REQUEST_TIMEOUT_MS=19000",
+      "AI_MAX_PROMPT_CHARS=12000",
+      "AI_MAX_OUTPUT_TOKENS=1400",
+      "AI_MAX_TRANSCRIPT_MESSAGES=18",
+      "AI_ROUTE_SONNET_MESSAGE_THRESHOLD=9",
+      "AI_ROUTE_SONNET_CHAR_THRESHOLD=4200",
       "FRESHFUL_BASE_URL=https://staging.freshful.ro",
       "FRESHFUL_SEARCH_PATH=/api/catalog/search",
       "FRESHFUL_REQUEST_TIMEOUT_MS=15000"
@@ -58,7 +68,23 @@ test("getApiConfig loads validated backend settings from an env file", () => {
       webClientId: "test-web-client.apps.googleusercontent.com"
     },
     anthropic: {
-      apiKey: "test-anthropic-key"
+      apiKey: "test-anthropic-key",
+      baseUrl: "https://api.anthropic.com",
+      apiVersion: "2023-06-01",
+      requestTimeoutMs: 19000,
+      models: {
+        haiku: "claude-3-5-haiku-latest",
+        sonnet: "claude-3-7-sonnet-latest"
+      },
+      usage: {
+        maxPromptChars: 12000,
+        maxOutputTokens: 1400,
+        maxTranscriptMessages: 18
+      },
+      routing: {
+        sonnetTranscriptMessageThreshold: 9,
+        sonnetPromptCharThreshold: 4200
+      }
     },
     freshful: {
       baseUrl: "https://staging.freshful.ro",
@@ -66,6 +92,27 @@ test("getApiConfig loads validated backend settings from an env file", () => {
       requestTimeoutMs: 15000
     }
   });
+});
+
+test("getApiConfig allows backend startup without Anthropic settings", () => {
+  const envFilePath = createTemporaryEnvFile(
+    ".env.api",
+    [
+      "APP_ENV=test",
+      "PORT=4100",
+      "DATABASE_URL=postgres://freshful:freshful@localhost:5432/freshful_test",
+      "APP_SESSION_SECRET=abcdefghijklmnopqrstuvwxyz123456",
+      "APP_SESSION_TTL_SECONDS=7200",
+      "GOOGLE_WEB_CLIENT_ID=test-web-client.apps.googleusercontent.com",
+      "FRESHFUL_BASE_URL=https://staging.freshful.ro",
+      "FRESHFUL_SEARCH_PATH=/api/catalog/search",
+      "FRESHFUL_REQUEST_TIMEOUT_MS=15000"
+    ].join("\n")
+  );
+
+  const config = getApiConfig({}, envFilePath);
+
+  assert.equal(config.anthropic, null);
 });
 
 test("getDatabaseConfig accepts DB-only runtime input without unrelated backend secrets", () => {
@@ -113,6 +160,16 @@ test("env example files document the required backend and mobile keys", () => {
     "APP_SESSION_TTL_SECONDS",
     "GOOGLE_WEB_CLIENT_ID",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_API_VERSION",
+    "ANTHROPIC_MODEL_HAIKU",
+    "ANTHROPIC_MODEL_SONNET",
+    "ANTHROPIC_REQUEST_TIMEOUT_MS",
+    "AI_MAX_PROMPT_CHARS",
+    "AI_MAX_OUTPUT_TOKENS",
+    "AI_MAX_TRANSCRIPT_MESSAGES",
+    "AI_ROUTE_SONNET_MESSAGE_THRESHOLD",
+    "AI_ROUTE_SONNET_CHAR_THRESHOLD",
     "FRESHFUL_BASE_URL",
     "FRESHFUL_SEARCH_PATH",
     "FRESHFUL_REQUEST_TIMEOUT_MS"

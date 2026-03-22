@@ -119,7 +119,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 
 ## Phase P5 - AI Onboarding and Household Profile Capture
 
-- [ ] P5-S1: Implement the Anthropic client wrapper, prompt templates, and model routing baseline
+- [x] P5-S1: Implement the Anthropic client wrapper, prompt templates, and model routing baseline
 	Owner: Coder
 	Depends on: P3-S1, P2-S3
 	Acceptance: The backend includes a single Claude service abstraction with prompt templates, structured response parsing, model-selection rules for Haiku and Sonnet, and clear configuration for usage limits and error handling.
@@ -250,6 +250,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - The next actionable step is P2-S3.
+
 
 
 

@@ -33,7 +33,23 @@ function createTestApiConfig(): ApiConfig {
       webClientId: "test-web-client.apps.googleusercontent.com"
     },
     anthropic: {
-      apiKey: "test-anthropic-key"
+      apiKey: "test-anthropic-key",
+      baseUrl: "https://api.anthropic.com",
+      apiVersion: "2023-06-01",
+      requestTimeoutMs: 20000,
+      models: {
+        haiku: "claude-3-5-haiku-latest",
+        sonnet: "claude-3-7-sonnet-latest"
+      },
+      usage: {
+        maxPromptChars: 16000,
+        maxOutputTokens: 1200,
+        maxTranscriptMessages: 24
+      },
+      routing: {
+        sonnetTranscriptMessageThreshold: 10,
+        sonnetPromptCharThreshold: 5000
+      }
     },
     freshful: {
       baseUrl: "https://www.freshful.ro",

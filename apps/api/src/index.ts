@@ -2,6 +2,37 @@ import { workspaceCatalog } from "@freshful/contracts";
 import { pathToFileURL } from "node:url";
 
 export { createApiApp, startApiServer, type ApiAppContext, type CreateApiAppOptions, type StartApiServerOptions } from "./app.js";
+export { createAnthropicClient, type ClaudeClient, type ClaudeClientRequest, type ClaudeClientResponse } from "./ai/client.js";
+export { ClaudeUpstreamError, ClaudeUsageLimitError } from "./ai/errors.js";
+export { parseStructuredResponse, type StructuredParseResult } from "./ai/parser.js";
+export {
+  assembleOnboardingReplyPrompt,
+  assembleProfileExtractionPrompt,
+  type ClaudePromptLimits,
+  type OnboardingReplyPromptInput,
+  type ProfileExtractionPromptInput,
+  type PromptEnvelope
+} from "./ai/prompts.js";
+export {
+  claudeModelTierValues,
+  claudeTaskValues,
+  selectClaudeModel,
+  type ClaudeModelTier,
+  type ClaudeRouteDecision,
+  type ClaudeRouteInput,
+  type ClaudeRoutingConfig,
+  type ClaudeTask
+} from "./ai/routing.js";
+export {
+  createClaudeService,
+  type ClaudeService,
+  type ClaudeServiceUsage,
+  type CreateClaudeServiceOptions,
+  type OnboardingReplyRequest,
+  type OnboardingReplyResponse,
+  type ProfileExtractionRequest,
+  type ProfileExtractionResponse
+} from "./ai/service.js";
 export {
   googleAuthRequestSchema,
   googleAuthResponseSchema,
@@ -31,12 +62,15 @@ export { createAuthService, type AuthService } from "./auth/service.js";
 export { closeApiDatabase, createApiDatabase } from "./db/client.js";
 export { ApiHttpError } from "./errors.js";
 export { getApiConfig, resolveApiWorkspacePath } from "./config.js";
+export type { ApiConfig } from "./config.js";
 export { getDatabaseConfig } from "./db/config.js";
 export { databaseTables, sensitiveTableColumns } from "./db/schema.js";
 export {
+  partialProfileWriteSchema,
   profileResponseSchema,
   profileUpsertResponseSchema,
   profileWriteSchema,
+  type PartialProfileWriteInput,
   type ProfileResponse,
   type ProfileUpsertResponse,
   type ProfileWriteInput

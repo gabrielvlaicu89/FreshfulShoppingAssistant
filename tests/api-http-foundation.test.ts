@@ -18,13 +18,36 @@ function createTestApiConfig(): ApiConfig {
       webClientId: "test-web-client.apps.googleusercontent.com"
     },
     anthropic: {
-      apiKey: "test-anthropic-key"
+      apiKey: "test-anthropic-key",
+      baseUrl: "https://api.anthropic.com",
+      apiVersion: "2023-06-01",
+      requestTimeoutMs: 20000,
+      models: {
+        haiku: "claude-3-5-haiku-latest",
+        sonnet: "claude-3-7-sonnet-latest"
+      },
+      usage: {
+        maxPromptChars: 16000,
+        maxOutputTokens: 1200,
+        maxTranscriptMessages: 24
+      },
+      routing: {
+        sonnetTranscriptMessageThreshold: 10,
+        sonnetPromptCharThreshold: 5000
+      }
     },
     freshful: {
       baseUrl: "https://www.freshful.ro",
       searchPath: "/search",
       requestTimeoutMs: 10000
     }
+  };
+}
+
+function createAnthropicOptionalTestConfig(): ApiConfig {
+  return {
+    ...createTestApiConfig(),
+    anthropic: null
   };
 }
 
@@ -42,6 +65,7 @@ test("createApiApp readies the Fastify foundation without binding a network port
 
   assert.equal(app.appContext.config.appEnv, "test");
   assert.equal(app.appContext.services.auth.status, "ready");
+  assert.equal(app.appContext.services.ai.status, "ready");
 });
 
 test("GET /health returns the backend foundation status and service shell metadata", async (t) => {
@@ -80,6 +104,30 @@ test("GET /health returns the backend foundation status and service shell metada
   assert.equal(payload.services.planner.status, "ready");
   assert.equal(typeof payload.timestamp, "string");
   assert.equal(typeof payload.uptimeSeconds, "number");
+});
+
+test("createApiApp leaves the AI service pending when Anthropic config is intentionally absent", async (t) => {
+  const app = createApiApp({
+    config: createAnthropicOptionalTestConfig(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  await app.ready();
+
+  assert.equal(app.appContext.services.auth.status, "ready");
+  assert.equal(app.appContext.services.ai.status, "pending");
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/health?details=full"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().services.ai.status, "pending");
 });
 
 test("GET /health returns a structured validation error for unsupported query values", async (t) => {
