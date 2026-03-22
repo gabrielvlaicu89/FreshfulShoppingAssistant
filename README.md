@@ -15,7 +15,7 @@ The repository is no longer just a Copilot starter. It already contains the proj
 
 ## Implemented Architecture
 
-- Mobile target: Android-first React Native client in `apps/mobile`.
+- Mobile target: Android-first React Native client in `apps/mobile`, with a bare Android scaffold, native-stack navigation, Zustand shell state, and TanStack Query wiring.
 - Backend target: Node.js and TypeScript API in `apps/api`.
 - Shared package: `packages/contracts` for cross-runtime types and `zod` schemas.
 - Database: PostgreSQL with Drizzle ORM and generated SQL migrations.
@@ -60,6 +60,9 @@ The repository is no longer just a Copilot starter. It already contains the proj
 - `npm run lint`: run ESLint across the repository.
 - `npm run typecheck`: run TypeScript checks across all workspaces.
 - `npm test`: run the full current test suite.
+- `npm run typecheck:mobile`: run the React Native mobile workspace typecheck only.
+- `npm run test:mobile`: run the mobile Jest screen test suite.
+- `npm run android:smoke:mobile`: build the Android JS bundle for the mobile app without requiring an emulator.
 - `npm run test:persistence`: run the database-focused persistence tests only.
 - `npm run db:generate`: generate Drizzle SQL migrations from the API schema.
 - `npm run db:migrate`: apply generated migrations to the database configured by `DATABASE_URL`.
@@ -122,7 +125,7 @@ The repo still uses the plan-first orchestration flow, but it now operates on a 
 
 ## What Is Still Placeholder
 
-- The mobile workspace is scaffold-only and does not yet contain the real React Native app shell.
+- The mobile workspace now contains the real React Native shell, but authenticated Google Sign-In and secure session restoration are still pending for `P4-S2`.
 - The API workspace now has the HTTP foundation, Google token verification, app session issuance, and protected profile endpoints, but it does not yet include AI orchestration or the Freshful adapter.
 
 ## Validation Baseline

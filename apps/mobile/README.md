@@ -1,7 +1,21 @@
 # Mobile Workspace
 
-This workspace is the minimal Android-client scaffold for P1-S2.
+This workspace now contains the Android-first React Native shell for the Freshful Shopping Assistant.
 
-It stays intentionally lightweight so the React Native application shell can be bootstrapped in P4-S1 without backing out a premature toolchain from this step.
+The current scope of the mobile app is intentionally narrow:
 
-For P2-S3, `src/config.ts` is a runtime-safe parser for injected mobile settings. It validates only safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, and request timeout settings, and it does not read local `.env` files at app runtime.
+- native Android project files for a bare React Native runtime
+- React Navigation stack wiring for the welcome, dashboard, and planner-preview shell screens
+- Zustand for cross-screen shell state
+- TanStack Query for live backend health fetching
+- runtime-safe client config parsing that still keeps server secrets out of the app
+
+Available commands:
+
+- `npm run start --workspace @freshful/mobile`: start Metro for the mobile app
+- `npm run android --workspace @freshful/mobile`: launch the Android app on an emulator or attached device
+- `npm run typecheck --workspace @freshful/mobile`: run the mobile TypeScript check
+- `npm run test --workspace @freshful/mobile`: run the mobile Jest suite
+- `npm run android:smoke --workspace @freshful/mobile`: bundle the Android JS entry and run `app:assembleDebug` so the native Android shell compiles without requiring an emulator
+
+`src/config.ts` remains the runtime-safe parser for injected mobile settings. The React Native runtime consumes those values through a bundler-level env bridge so the app stays aligned with the safe client-only `.env` contract introduced in P2-S3.

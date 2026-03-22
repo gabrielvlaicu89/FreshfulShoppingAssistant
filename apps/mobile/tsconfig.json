@@ -1,8 +1,9 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@react-native/typescript-config/tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "outDir": "dist"
+    "types": ["node", "jest", "react", "react-native"],
+    "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["App.tsx", "jest.setup.ts", "src/**/*", "test/**/*"]
 }

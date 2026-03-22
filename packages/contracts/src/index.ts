@@ -35,6 +35,7 @@ export const budgetBandValues = ["low", "medium", "high"] as const;
 export const cookingSkillValues = ["beginner", "intermediate", "advanced"] as const;
 export const onboardingRoleValues = ["system", "assistant", "user"] as const;
 export const mealSlotValues = ["breakfast", "lunch", "dinner", "snack"] as const;
+export type MealSlot = (typeof mealSlotValues)[number];
 export const freshfulAvailabilityValues = ["in_stock", "low_stock", "out_of_stock", "unknown"] as const;
 export const shoppingListStatusValues = ["draft", "final"] as const;
 export const shoppingListItemStatusValues = ["pending", "bought", "replaced"] as const;

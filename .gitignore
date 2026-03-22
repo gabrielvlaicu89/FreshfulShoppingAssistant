@@ -3,6 +3,11 @@ node_modules/
 .ai/logs/*.log
 apps/*/.env
 apps/*/dist/
+apps/mobile/.artifacts/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/android/build/
+apps/mobile/android/local.properties
 packages/*/dist/
 *.tsbuildinfo
 packages/contracts/src/*.d.ts

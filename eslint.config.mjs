@@ -7,13 +7,17 @@ export default tseslint.config(
     ignores: [
       "node_modules/**",
       "apps/*/dist/**",
+      "apps/mobile/android/.gradle/**",
+      "apps/mobile/android/app/build/**",
+      "apps/mobile/android/build/**",
+      "apps/mobile/.artifacts/**",
       "packages/*/dist/**",
       "packages/contracts/src/**/*.d.ts",
       "packages/contracts/src/**/*.js"
     ]
   },
   {
-    files: ["**/*.mjs"],
+    files: ["**/*.{mjs,cjs}"],
     ...js.configs.recommended,
     languageOptions: {
       ...js.configs.recommended.languageOptions,
@@ -21,7 +25,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       globals: globals.node

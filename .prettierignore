@@ -1,6 +1,10 @@
 node_modules/
 .ai/logs/
 apps/*/dist/
+apps/mobile/.artifacts/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/android/build/
 packages/*/dist/
 packages/contracts/src/*.d.ts
 packages/contracts/src/*.js
