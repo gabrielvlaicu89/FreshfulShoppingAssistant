@@ -1,215 +1,141 @@
-# Copilot Orchestrator Boilerplate
+# Freshful Shopping Assistant
 
-This repository is a reusable starter for building apps in VS Code with GitHub Copilot agent workflows. It is designed around a DESCRIPTION.md-first process: you describe the app in the repository root, then use a dedicated orchestrator agent to plan, implement, test, review, and prepare commits in repeatable phases.
+Freshful Shopping Assistant is an Android-first AI grocery planning product for Romanian users. The goal is to capture a household profile through chat, generate meal plans, map those plans to Freshful products, and return a practical shopping list backed by a TypeScript mobile app, a Node backend, and shared contracts.
 
-The boilerplate is intentionally lightweight. It uses markdown artifacts, workspace-local Copilot customizations, JSON configuration, and small Node.js helper scripts instead of a heavier framework. The result is easy to inspect, easy to copy into other repositories, and practical for real app development.
+The repository is no longer just a Copilot starter. It already contains the project specification in [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md), an execution plan in [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md), a scaffolded monorepo, shared runtime contracts, and the first backend persistence slice.
 
-## Quick Start
+## Current Status
 
-1. Replace the template content in DESCRIPTION.md with the app specification.
-2. Open the repository in VS Code with GitHub Copilot Chat enabled.
-3. Run `npm run env:bootstrap` to create local `.env` files for the API and mobile workspaces from the checked-in examples.
-4. Run `npm run lint`, `npm run typecheck`, and `npm test` from the root before asking the tester or reviewer agents to validate a step.
-5. Run `npm start` when you want the placeholder workspace startup flow to verify the current scaffold wiring.
-6. Run the reusable prompt .github/prompts/create-initial-plan.prompt.md.
-7. Run the reusable prompt .github/prompts/start-next-feature.prompt.md.
-8. Repeat the start-next-feature prompt until all plan items are complete.
+- `P1-S1`, `P1-S2`, `P1-S3`, `P2-S1`, and `P2-S2` are complete.
+- The repo now includes `apps/api`, `apps/mobile`, and `packages/contracts` npm workspaces.
+- Shared domain contracts and runtime schemas live in `@freshful/contracts`.
+- The backend now has PostgreSQL persistence, Drizzle schema definitions, generated migrations, local Docker Compose config, and ownership-safe persistence tests.
+- Repository-level env examples, validated config loaders, and workspace runtime configuration docs are now in place for the API and mobile workspaces.
 
-## What This Boilerplate Includes
+## Implemented Architecture
 
-- Root workflow documents: DESCRIPTION.md, PLAN.md, AGENTS.md, CONTRIBUTING.md.
-- Workspace-local Copilot customizations under .github/.
-- Five custom agents: orchestrator, planning, coder, tester, reviewer.
-- Five reusable skills aligned to the workflow.
-- Reusable prompt files that target the orchestrator.
-- Preview-oriented hook definitions with documented fallbacks.
-- Helper scripts in scripts/ for plan parsing, progress updates, changed-file inspection, commit drafting, and audit logging.
-- State and configuration files in .ai/.
+- Mobile target: Android-first React Native client in `apps/mobile`.
+- Backend target: Node.js and TypeScript API in `apps/api`.
+- Shared package: `packages/contracts` for cross-runtime types and `zod` schemas.
+- Database: PostgreSQL with Drizzle ORM and generated SQL migrations.
+- Local database workflow: Docker Compose in `apps/api/compose.yaml`.
+- Test persistence workflow: `@electric-sql/pglite` applies generated migrations in tests without needing a live Postgres instance.
 
 ## Repository Structure
 
 ```text
 .
-├── .ai/
-│   ├── last-run.md
-│   ├── orchestrator.config.json
-│   ├── state.json
-│   └── logs/
-├── .github/
-│   ├── agents/
-│   ├── hooks/
-│   ├── instructions/
-│   ├── prompts/
-│   └── skills/
+├── apps/
+│   ├── api/
+│   │   ├── compose.yaml
+│   │   ├── drizzle/
+│   │   ├── drizzle.config.ts
+│   │   └── src/
+│   │       └── db/
+│   └── mobile/
+├── docs/
+│   └── architecture/
+├── packages/
+│   └── contracts/
+├── tests/
 ├── scripts/
-├── AGENTS.md
-├── CONTRIBUTING.md
 ├── DESCRIPTION.md
 ├── PLAN.md
-├── README.md
 └── package.json
 ```
 
-## Core Workflow
+## Getting Started
 
-The normal operating flow is:
+1. Install dependencies with `npm install`.
+2. Bootstrap local env files with `npm run env:bootstrap`.
+3. Review the product specification in [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md).
+4. Review the current implementation plan in [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md).
+5. Run `npm run lint`, `npm run typecheck`, and `npm test` to validate the current workspace.
 
-1. The user writes the product specification in DESCRIPTION.md.
-2. The orchestrator reads DESCRIPTION.md and delegates planning to the planning agent.
-3. The planning agent produces or refreshes PLAN.md.
-4. The orchestrator determines the next incomplete step from PLAN.md and .ai/state.json.
-5. The orchestrator delegates implementation to the coder agent.
-6. The orchestrator delegates tests, lint, and validation to the tester agent.
-7. Failures are routed back to the coder agent with a bounded, explicit fix loop.
-8. After validation passes, the orchestrator delegates review to the reviewer agent.
-9. Reviewer findings are routed back to the coder agent if changes are required.
-10. When the step or phase is accepted, the orchestrator updates PLAN.md and .ai/state.json, drafts a commit, and optionally performs commit and push actions based on configuration.
+## Development Commands
 
-The orchestrator is the main user-facing entry point. The other agents are designed as role-focused subagents with narrower responsibilities and lower privilege.
+- `npm run env:bootstrap`: create `apps/api/.env` and `apps/mobile/.env` from checked-in examples.
+- `npm run env:check`: fail fast if local env files are missing.
+- `npm run lint`: run ESLint across the repository.
+- `npm run typecheck`: run TypeScript checks across all workspaces.
+- `npm test`: run the full current test suite.
+- `npm run test:persistence`: run the database-focused persistence tests only.
+- `npm run db:generate`: generate Drizzle SQL migrations from the API schema.
+- `npm run db:migrate`: apply generated migrations to the database configured by `DATABASE_URL`.
+- `npm start`: run the current placeholder workspace startup flow.
 
-## Agent Architecture
+## Environment And Secrets
 
-### Orchestrator
+This repo keeps runtime configuration separated by workspace:
 
-- Reads DESCRIPTION.md, PLAN.md, and .ai/orchestrator.config.json.
-- Delegates planning, coding, testing, and review to subagents.
-- Decides the next actionable step and last completed step.
-- Updates progress artifacts and prepares commit output.
-- Stops safely when a blocker requires user input or environment access.
+- `apps/api/.env` is for backend-only settings, including `DATABASE_URL`, `GOOGLE_WEB_CLIENT_ID`, `ANTHROPIC_API_KEY`, and Freshful integration values.
+- `apps/mobile/.env` is limited to safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, and request timeout settings used to inject mobile runtime config.
 
-### Planning
+The checked-in `.env.example` files define the required keys without containing live credentials. `npm run env:bootstrap` copies those templates locally if the real `.env` files do not exist yet. Keep actual secrets in untracked local env files for development and in your deployment secret manager for shared environments.
 
-- Reads DESCRIPTION.md and repository state.
-- Produces a structured PLAN.md with phases, steps, dependencies, acceptance criteria, and test expectations.
-- Operates primarily in read-only mode.
+Current validated runtime loaders:
 
-### Coder
+- `apps/api/src/config.ts` validates the full backend runtime settings for environment selection, HTTP port, database access, Google auth, Anthropic access, and Freshful integration, while `apps/api/src/db/config.ts` keeps DB-only tooling limited to `DATABASE_URL`.
+- `apps/mobile/src/config.ts` validates injected mobile runtime settings that are safe to keep on-device and explicitly excludes server-side secrets and local file reads at app runtime.
 
-- Implements one step or one small slice at a time.
-- Uses minimal focused edits.
-- Responds to tester failures and reviewer change requests.
+## API Persistence Workflow
 
-### Tester
+The backend persistence foundation is implemented in `apps/api`.
 
-- Adds or updates tests where appropriate.
-- Runs the configured test, lint, typecheck, and build commands when available.
-- Produces a strict pass or fail result with actionable failure detail.
+- Schema definitions live in `apps/api/src/db/schema.ts`.
+- Database config loading lives in `apps/api/src/db/config.ts`.
+- Runtime connection setup lives in `apps/api/src/db/client.ts`.
+- Migration application lives in `apps/api/src/db/migrate.ts`.
+- Generated SQL migrations live in `apps/api/drizzle/`.
+- Local Postgres is defined in `apps/api/compose.yaml`.
 
-### Reviewer
+Typical local database flow:
 
-- Performs a review only after implementation and validation.
-- Checks correctness, maintainability, architecture fit, requirement coverage, and risks.
-- Returns either approved or changes-requested with structured findings.
+1. Run `npm run db:dev:up --workspace @freshful/api`.
+2. Run `npm run db:generate --workspace @freshful/api` if the schema changed.
+3. Run `npm run db:migrate --workspace @freshful/api`.
+4. Run `npm run test:persistence` to validate schema and migration behavior.
 
-## Skills
+## Shared Contracts
 
-The boilerplate includes reusable skills rather than burying every procedure inside agent prompts:
+`packages/contracts` now contains shared domain types and runtime validation for:
 
-- planning-from-description: create a robust automation-friendly PLAN.md from DESCRIPTION.md.
-- implementation-step-execution: implement a single plan step with bounded scope.
-- testing-and-linting: run validation and summarize failures clearly.
-- review-checklist: apply a structured post-validation review.
-- git-commit-and-progress-update: update state, draft a commit, and enforce safe git behavior.
+- household profiles
+- onboarding transcripts and chat messages
+- recipes and ingredient structures
+- meal plan templates, instances, and overrides
+- Freshful product and search metadata
+- shopping lists and shopping list items
+- API error payloads
 
-Each skill is self-contained in .github/skills/<skill-name>/SKILL.md and references repository files and helper scripts directly.
+These contracts are used to keep the mobile app, backend, and persistence model aligned.
 
-## Hooks
+## Project Workflow
 
-The hook files in .github/hooks/ are practical defaults, not magic. They cover:
+The repo still uses the plan-first orchestration flow, but it now operates on a real product codebase rather than a blank template.
 
-- session-start logging
-- repository prerequisite validation
-- post-edit changed-file inspection and audit logging
-- push safeguards
+1. Product intent is defined in [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md).
+2. Execution steps are tracked in [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md).
+3. Automation state is stored in `.ai/state.json` and `.ai/last-run.md`.
+4. The normal implementation loop is: implement one plan step, validate it, review it, then update plan and state.
 
-Hook support is still evolving across Copilot environments. This boilerplate treats hooks as a preview feature and includes script-level fallbacks so the same checks can be run manually or by agents even if a specific client does not load every hook file automatically.
+## What Is Still Placeholder
 
-## State And Progress Tracking
+- The mobile workspace is scaffold-only and does not yet contain the real React Native app shell.
+- The API workspace has persistence foundations but not the HTTP service, auth, AI orchestration, or Freshful adapter yet.
 
-The automation uses two main artifacts:
+## Validation Baseline
 
-- PLAN.md is the human-readable source of truth for phases, steps, checkboxes, acceptance criteria, tests, and review status.
-- .ai/state.json is the machine-friendly cache for current step, last completed step, last reviewed step, commit history, and last run metadata.
+The current repo is expected to pass these commands from the root:
 
-The helper script scripts/find-plan-item.mjs can determine:
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
+- `npm run db:generate`
+- `npm run test:persistence`
 
-- whether planning exists
-- the next incomplete step
-- the last completed step
-- a summary of actionable plan state
+## References
 
-The helper script scripts/update-progress.mjs updates both PLAN.md and .ai/state.json together.
-
-## Configuration
-
-The file .ai/orchestrator.config.json controls automation defaults:
-
-- test, lint, typecheck, and build commands
-- commit and push behavior
-- branch strategy
-- retry limits
-- hook enablement
-- state file locations
-- feature flags
-
-The defaults are conservative. Auto-commit and auto-push are off by default.
-
-## Developer Commands
-
-- `npm run env:bootstrap` creates `apps/api/.env` and `apps/mobile/.env` from the example templates when those files do not exist yet.
-- `npm run env:check` fails fast when required local env files have not been bootstrapped.
-- `npm run lint` runs ESLint across the TypeScript and Node helper files in the repository.
-- `npm run typecheck` runs TypeScript typechecking across every npm workspace that exposes a `typecheck` script.
-- `npm test` runs the baseline workspace smoke tests with Node's built-in test runner through `tsx`.
-- `npm run format:check` enforces the repository Prettier policy, and `npm run format` applies it.
-- `npm start` boots the current placeholder API and mobile workspace startup flow without pretending the product app is fully implemented yet.
-
-## Prompt Usage
-
-Three reusable prompt files are included:
-
-- .github/prompts/create-initial-plan.prompt.md
-- .github/prompts/start-next-feature.prompt.md
-- .github/prompts/re-review-last-feature.prompt.md
-
-They are designed as lightweight slash-command style entry points that always target the orchestrator agent.
-
-## Safety Model
-
-- Least privilege: the orchestrator can delegate, but specialized subagents stay focused on their role.
-- No silent failure: tester and reviewer are instructed to report structured outcomes.
-- No automatic push by default: pushes require configuration and environment support.
-- No hidden state: automation state is stored in tracked markdown and JSON files.
-- Deterministic helpers: simple Node scripts are used where parsing or state updates need to be consistent.
-
-## Customization Guide
-
-You can adapt this boilerplate in several ways:
-
-1. Change the commands in .ai/orchestrator.config.json to match the actual stack.
-2. Tighten or loosen tool access in the agent frontmatter under .github/agents/.
-3. Add domain-specific skills under .github/skills/.
-4. Add more prompts for common workflows such as release prep or bug-fix triage.
-5. Update AGENTS.md and .github/instructions/ to reflect team conventions.
-
-## Assumptions
-
-- VS Code with GitHub Copilot Chat and workspace-local customizations is available.
-- Node.js 18 or newer is available for helper scripts.
-- Git is available when using changed-file, commit-draft, or push-related helpers.
-- The repository owner will replace the DESCRIPTION.md template before asking the agents to plan real work.
-
-## Limitations And Caveats
-
-- Hook support varies by client version and may require adjustment as the preview format evolves.
-- Custom agent frontmatter and tool restriction support also evolve; treat these files as a strong starting point, not a guaranteed universal schema.
-- The boilerplate does not generate app code by itself. It creates the agent operating system that builds the app from DESCRIPTION.md.
-- Push automation is intentionally gated and may still require explicit confirmation, authentication, or environment approval.
-
-## Recommended Adoption Path
-
-1. Fill DESCRIPTION.md with a real product specification.
-2. Update .ai/orchestrator.config.json with stack-specific commands.
-3. Run the initial plan prompt and inspect PLAN.md.
-4. Let the orchestrator execute one feature at a time.
-5. Refine the agents and skills after the first project cycle based on what worked and what created friction.
+- Product contract: [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md)
+- Execution plan: [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md)
+- API persistence notes: [apps/api/README.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/apps/api/README.md)

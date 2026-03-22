@@ -64,12 +64,12 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Run migration generation or apply commands in the local environment and execute backend persistence tests plus root typecheck.
 	Review: Approved; reviewer confirmed the PostgreSQL schema, migration flow, and ownership constraints support the current scope and keep sensitive profile and transcript handling explicit.
 
-- [ ] P2-S3: Add repository-level configuration for secrets and environment separation
+- [x] P2-S3: Add repository-level configuration for secrets and environment separation
 	Owner: Coder
 	Depends on: P2-S2
 	Acceptance: Example environment files, config loaders, and secret-handling documentation exist for mobile and backend runtimes, covering Google auth, Anthropic access, database connectivity, and Freshful integration settings without committing live secrets.
 	Tests: Run config loading tests or startup smoke checks and confirm npm run hooks:validate still passes.
-	Review: Required; reviewer verifies no credentials are committed and required variables are clearly defined.
+	Review: Approved; reviewer confirmed the repo-level env templates, backend and mobile config loaders, and documentation now enforce the intended client/server secret boundary without committing live credentials.
 
 ## Phase P3 - Backend Platform and Authentication
 
@@ -250,6 +250,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - The next actionable step is P2-S3.
+
 
 
 

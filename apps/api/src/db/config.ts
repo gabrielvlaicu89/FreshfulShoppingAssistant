@@ -1,32 +1,44 @@
 import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import dotenv from "dotenv";
 import { z } from "zod";
 
-const apiWorkspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const defaultEnvPath = path.join(apiWorkspaceRoot, ".env");
+import { resolveApiWorkspacePath } from "../config.js";
 
-const databaseConfigSchema = z
+const defaultEnvPath = resolveApiWorkspacePath(".env");
+const databaseEnvironmentSchema = z
   .object({
-    DATABASE_URL: z.string().trim().url().or(z.string().trim().startsWith("postgres://")).or(z.string().trim().startsWith("postgresql://"))
+    DATABASE_URL: z.string().trim().refine(
+      (value) => value.startsWith("postgres://") || value.startsWith("postgresql://"),
+      "DATABASE_URL must use postgres:// or postgresql://."
+    )
   })
   .strict();
 
-export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
+export interface DatabaseConfig {
+  DATABASE_URL: string;
+}
 
-export function resolveApiWorkspacePath(...pathSegments: string[]): string {
-  return path.join(apiWorkspaceRoot, ...pathSegments);
+export { resolveApiWorkspacePath };
+
+function readDatabaseEnvironmentFile(envFilePath: string): Record<string, string> {
+  if (!fs.existsSync(envFilePath)) {
+    return {};
+  }
+
+  return dotenv.parse(fs.readFileSync(envFilePath, "utf8"));
 }
 
 export function getDatabaseConfig(environment: NodeJS.ProcessEnv = process.env, envFilePath = defaultEnvPath): DatabaseConfig {
-  const mergedEnvironment = {
-    ...(fs.existsSync(envFilePath) ? dotenv.parse(fs.readFileSync(envFilePath, "utf8")) : {}),
+  const mergedEnvironment: Record<string, string | undefined> = {
+    ...readDatabaseEnvironmentFile(envFilePath),
     ...environment
   };
-
-  return databaseConfigSchema.parse({
+  const parsedEnvironment = databaseEnvironmentSchema.parse({
     DATABASE_URL: mergedEnvironment.DATABASE_URL
   });
+
+  return {
+    DATABASE_URL: parsedEnvironment.DATABASE_URL
+  };
 }

@@ -24,3 +24,26 @@ This workspace now includes the persistence foundation for P2-S2 using PostgreSQ
 4. Apply them with `npm run db:migrate --workspace @freshful/api`.
 
 Sensitive profile and transcript fields are explicitly marked in the schema metadata so later service layers can enforce stricter handling around health-related profile data and raw chat content.
+
+## Runtime Configuration
+
+The backend now uses a validated runtime config loader in `src/config.ts`. It reads `apps/api/.env`, applies safe defaults for local development where appropriate, and refuses to start when required values are missing or malformed.
+
+Database-only tooling uses `src/db/config.ts`, which validates only `DATABASE_URL` so migrations and other persistence flows do not require unrelated backend secrets.
+
+Required backend environment variables:
+
+- `APP_ENV`: `development`, `test`, or `production`
+- `PORT`: local API port for the backend runtime
+- `DATABASE_URL`: PostgreSQL connection string for Drizzle and runtime access
+- `GOOGLE_WEB_CLIENT_ID`: Google OAuth client ID used for backend token verification in later auth steps
+- `ANTHROPIC_API_KEY`: server-side Claude access key; never expose this to the mobile app
+- `FRESHFUL_BASE_URL`: Freshful origin used by the backend integration layer
+- `FRESHFUL_SEARCH_PATH`: relative catalogue search path used by the Freshful adapter baseline
+- `FRESHFUL_REQUEST_TIMEOUT_MS`: request timeout budget for Freshful catalogue calls
+
+Secret handling rules for this workspace:
+
+- Keep live `DATABASE_URL` and `ANTHROPIC_API_KEY` values in local `.env` files or deployment secret stores only.
+- Commit only `.env.example` templates with placeholder values.
+- Do not mirror third-party secrets into `apps/mobile/.env`; the mobile runtime should only receive safe client-visible values.

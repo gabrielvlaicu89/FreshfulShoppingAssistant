@@ -1,6 +1,8 @@
 import { workspaceCatalog } from "@freshful/contracts";
 import { pathToFileURL } from "node:url";
 
+export { getMobileConfig } from "./config.js";
+
 const defaultMobileWorkspace = {
   name: "@freshful/mobile",
   path: "apps/mobile"
@@ -18,5 +20,5 @@ export function describeMobileWorkspace(): string {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.log(`Mobile workspace placeholder ready at ${describeMobileWorkspace()}.`);
-  console.log("The React Native Android shell is scheduled for P4-S1 and later mobile steps.");
+  console.log("Validated mobile runtime config parsing is ready for P2-S3; the React Native Android shell is scheduled for P4-S1 and later mobile steps.");
 }
