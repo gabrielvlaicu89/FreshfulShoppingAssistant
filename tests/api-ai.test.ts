@@ -4,6 +4,7 @@ import test from "node:test";
 import type { OnboardingChatMessage } from "@freshful/contracts";
 
 import {
+  assembleMealPlanPrompt,
   assembleProfileExtractionPrompt,
   ClaudeUpstreamError,
   ClaudeUsageLimitError,
@@ -143,6 +144,50 @@ test("selectClaudeModel keeps short onboarding turns on Haiku and routes structu
     }).tier,
     "sonnet"
   );
+  assert.equal(
+    selectClaudeModel(routing, {
+      task: "meal-plan-generation",
+      transcriptMessageCount: 0,
+      promptChars: 100
+    }).tier,
+    "sonnet"
+  );
+});
+
+test("assembleMealPlanPrompt embeds request constraints and profile context", () => {
+  const prompt = assembleMealPlanPrompt({
+    options: {
+      durationDays: 3,
+      mealSlots: ["breakfast", "dinner"],
+      startDate: "2026-03-23"
+    },
+    profile: {
+      householdType: "family",
+      numChildren: 1,
+      dietaryRestrictions: ["vegetarian"],
+      allergies: {
+        normalized: ["peanuts"],
+        freeText: []
+      },
+      medicalFlags: {
+        diabetes: false,
+        hypertension: false
+      },
+      goals: ["maintenance"],
+      cuisinePreferences: ["Romanian"],
+      favoriteIngredients: ["tomatoes"],
+      dislikedIngredients: ["celery"],
+      budgetBand: "medium",
+      maxPrepTimeMinutes: 30,
+      cookingSkill: "intermediate"
+    }
+  });
+
+  assert.equal(prompt.system.includes("Return valid JSON only"), true);
+  assert.equal(prompt.system.includes("include each requested meal slot exactly once"), true);
+  assert.equal(prompt.messages[0]?.content.includes('"durationDays":3'), true);
+  assert.equal(prompt.messages[0]?.content.includes('"mealSlots":["breakfast","dinner"]'), true);
+  assert.equal(prompt.messages[0]?.content.includes('"dietaryRestrictions":["vegetarian"]'), true);
 });
 
 test("assembleProfileExtractionPrompt forbids invented allergies and medical flags", () => {
@@ -336,6 +381,129 @@ test("createClaudeService rejects invalid partial profile data in incomplete ext
   assert.equal(result.profile, null);
   assert.deepEqual(result.missingFields, []);
   assert.equal(result.parseFailureReason, "schema_mismatch");
+});
+
+test("createClaudeService parses structured meal plan output and routes plan generation to Sonnet", async () => {
+  const calls: Array<{ model: string; system: string; content: string }> = [];
+  const service = createClaudeService({
+    config: createAnthropicTestConfig(),
+    client: {
+      async createMessage(request) {
+        calls.push({
+          model: request.model,
+          system: request.system,
+          content: request.messages[0]?.content ?? ""
+        });
+
+        return {
+          id: "msg_plan_1",
+          model: request.model,
+          text: JSON.stringify({
+            title: "3 Day Vegetarian Family Plan",
+            durationDays: 3,
+            recipes: [
+              {
+                id: "recipe-1",
+                title: "Tomato Oat Breakfast Bowl",
+                ingredients: [
+                  {
+                    name: "oats",
+                    quantity: 80,
+                    unit: "g"
+                  }
+                ],
+                instructions: ["Cook oats", "Top and serve"],
+                tags: ["vegetarian"],
+                estimatedMacros: {
+                  calories: 420,
+                  proteinGrams: 14,
+                  carbsGrams: 55,
+                  fatGrams: 12
+                }
+              }
+            ],
+            days: [
+              {
+                dayNumber: 1,
+                meals: [
+                  {
+                    slot: "breakfast",
+                    recipeId: "recipe-1"
+                  }
+                ]
+              },
+              {
+                dayNumber: 2,
+                meals: [
+                  {
+                    slot: "breakfast",
+                    recipeId: "recipe-1"
+                  }
+                ]
+              },
+              {
+                dayNumber: 3,
+                meals: [
+                  {
+                    slot: "breakfast",
+                    recipeId: "recipe-1"
+                  }
+                ]
+              }
+            ],
+            metadata: {
+              tags: ["family", "vegetarian"],
+              estimatedMacros: {
+                calories: 1260,
+                proteinGrams: 42,
+                carbsGrams: 165,
+                fatGrams: 36
+              }
+            }
+          }),
+          stopReason: "end_turn",
+          usage: {
+            inputTokens: 210,
+            outputTokens: 320
+          }
+        };
+      }
+    }
+  });
+
+  const result = await service.createMealPlan({
+    options: {
+      durationDays: 3,
+      mealSlots: ["breakfast"]
+    },
+    profile: {
+      householdType: "family",
+      numChildren: 1,
+      dietaryRestrictions: ["vegetarian"],
+      allergies: {
+        normalized: [],
+        freeText: []
+      },
+      medicalFlags: {
+        diabetes: false,
+        hypertension: false
+      },
+      goals: ["maintenance"],
+      cuisinePreferences: ["Romanian"],
+      favoriteIngredients: ["tomatoes"],
+      dislikedIngredients: ["celery"],
+      budgetBand: "medium",
+      maxPrepTimeMinutes: 30,
+      cookingSkill: "intermediate"
+    }
+  });
+
+  assert.equal(calls[0]?.model, "claude-3-7-sonnet-latest");
+  assert.equal(calls[0]?.system.includes("structured meal plans"), true);
+  assert.equal(calls[0]?.content.includes('"mealSlots":["breakfast"]'), true);
+  assert.equal(result.plan?.durationDays, 3);
+  assert.equal(result.parseFailureReason, null);
+  assert.equal(result.usage.modelTier, "sonnet");
 });
 
 test("createClaudeService rejects oversized prompts before calling Anthropic", async () => {

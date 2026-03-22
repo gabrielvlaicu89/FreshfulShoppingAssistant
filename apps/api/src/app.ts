@@ -35,6 +35,9 @@ import {
 import { onboardingChatRequestSchema, onboardingChatResponseSchema } from "./onboarding/contracts.js";
 import { createOnboardingTranscriptRepository, type OnboardingTranscriptRepository } from "./onboarding/repository.js";
 import { createOnboardingService, type OnboardingService } from "./onboarding/service.js";
+import { createPlanRequestSchema, createPlanResponseSchema } from "./planner/contracts.js";
+import { createPlannerRepository, type PlannerRepository } from "./planner/repository.js";
+import { createPlannerService, type PlannerService } from "./planner/service.js";
 import { profileResponseSchema, profileUpsertResponseSchema, profileWriteSchema } from "./profile/contracts.js";
 import { createHouseholdProfileRepository, type HouseholdProfileRepository } from "./profile/repository.js";
 import { createProfileService, type ProfileService } from "./profile/service.js";
@@ -95,6 +98,10 @@ export interface CreateApiAppOptions {
   onboarding?: {
     repository?: OnboardingTranscriptRepository;
     service?: OnboardingService;
+  };
+  planner?: {
+    repository?: PlannerRepository;
+    service?: PlannerService;
   };
 }
 
@@ -161,6 +168,10 @@ function isClaudeService(value: unknown): value is ClaudeService {
 
 function isOnboardingService(value: unknown): value is OnboardingService {
   return typeof value === "object" && value !== null && "sendMessage" in value;
+}
+
+function isPlannerService(value: unknown): value is PlannerService {
+  return typeof value === "object" && value !== null && "createPlan" in value;
 }
 
 function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
@@ -257,6 +268,23 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
         profileService,
         aiService: aiImplementation
       });
+  const plannerService = isPlannerService(options.planner?.service)
+    ? options.planner.service
+    : isPlannerService(options.services?.planner?.implementation)
+      ? options.services.planner.implementation
+      : createPlannerService({
+          repository:
+            options.planner?.repository ??
+            createPlannerRepository(
+              (ownedDatabase ??=
+                createApiDatabase({
+                  databaseUrl: config.databaseUrl,
+                  maxConnections: config.appEnv === "production" ? 5 : 1
+                })).db
+            ),
+          profileService,
+          aiService: aiImplementation
+        });
   const appContext: ApiAppContext = {
     config,
     services: createApiServices({
@@ -270,6 +298,11 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
         name: "auth",
         status: "ready",
         implementation: authImplementation
+      },
+      planner: options.services?.planner ?? {
+        name: "planner",
+        status: aiImplementation ? "ready" : "pending",
+        implementation: plannerService
       }
     }),
     startedAt: new Date().toISOString(),
@@ -368,6 +401,13 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     const body = parseRequestPart(onboardingChatRequestSchema, request.body, "body");
 
     return onboardingChatResponseSchema.parse(await onboardingService.sendMessage(session.userId, body));
+  });
+
+  app.post("/plans", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const body = parseRequestPart(createPlanRequestSchema, request.body, "body");
+
+    return createPlanResponseSchema.parse(await plannerService.createPlan(session.userId, body));
   });
 
   app.setNotFoundHandler((request, reply) => {

@@ -66,6 +66,7 @@ test("createApiApp readies the Fastify foundation without binding a network port
   assert.equal(app.appContext.config.appEnv, "test");
   assert.equal(app.appContext.services.auth.status, "ready");
   assert.equal(app.appContext.services.ai.status, "ready");
+  assert.equal(app.appContext.services.planner.status, "ready");
 });
 
 test("GET /health returns the backend foundation status and service shell metadata", async (t) => {

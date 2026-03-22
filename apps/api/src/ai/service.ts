@@ -7,11 +7,12 @@ import {
   type PartialProfileWriteInput,
   type ProfileWriteInput
 } from "../profile/contracts.js";
+import { generatedMealPlanSchema, type CreatePlanRequest, type GeneratedMealPlan } from "../planner/contracts.js";
 import { type AnthropicConfig } from "../config.js";
 import { type ClaudeClient, createAnthropicClient } from "./client.js";
 import { ClaudeUsageLimitError } from "./errors.js";
 import { parseStructuredResponse } from "./parser.js";
-import { assembleOnboardingReplyPrompt, assembleProfileExtractionPrompt } from "./prompts.js";
+import { assembleMealPlanPrompt, assembleOnboardingReplyPrompt, assembleProfileExtractionPrompt } from "./prompts.js";
 import { selectClaudeModel, type ClaudeModelTier, type ClaudeTask } from "./routing.js";
 
 const profileExtractionEnvelopeSchema = z.discriminatedUnion("status", [
@@ -61,9 +62,41 @@ export interface ProfileExtractionResponse {
   usage: ClaudeServiceUsage;
 }
 
+export interface MealPlanGenerationRequest {
+  profile: {
+    householdType: string;
+    numChildren: number;
+    dietaryRestrictions: string[];
+    allergies: {
+      normalized: string[];
+      freeText: string[];
+    };
+    medicalFlags: {
+      diabetes: boolean;
+      hypertension: boolean;
+    };
+    goals: string[];
+    cuisinePreferences: string[];
+    favoriteIngredients: string[];
+    dislikedIngredients: string[];
+    budgetBand: string;
+    maxPrepTimeMinutes: number;
+    cookingSkill: string;
+  };
+  options: CreatePlanRequest;
+}
+
+export interface MealPlanGenerationResponse {
+  plan: GeneratedMealPlan | null;
+  rawText: string;
+  parseFailureReason: "missing_json" | "invalid_json" | "schema_mismatch" | null;
+  usage: ClaudeServiceUsage;
+}
+
 export interface ClaudeService {
   createOnboardingReply(request: OnboardingReplyRequest): Promise<OnboardingReplyResponse>;
   extractProfile(request: ProfileExtractionRequest): Promise<ProfileExtractionResponse>;
+  createMealPlan(request: MealPlanGenerationRequest): Promise<MealPlanGenerationResponse>;
 }
 
 export interface CreateClaudeServiceOptions {
@@ -181,6 +214,28 @@ export function createClaudeService(options: CreateClaudeServiceOptions): Claude
         profile: null,
         rawText: response.text.trim(),
         missingFields: [],
+        parseFailureReason: parsed.failureReason,
+        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+      };
+    },
+
+    async createMealPlan(request) {
+      const prompt = assembleMealPlanPrompt(request);
+
+      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
+
+      const route = resolveModel(options.config, "meal-plan-generation", prompt.transcriptMessageCount, prompt.promptChars);
+      const response = await client.createMessage({
+        model: route.model,
+        system: prompt.system,
+        maxTokens: options.config.usage.maxOutputTokens,
+        messages: prompt.messages
+      });
+      const parsed = parseStructuredResponse(response.text, generatedMealPlanSchema);
+
+      return {
+        plan: parsed.data,
+        rawText: response.text.trim(),
         parseFailureReason: parsed.failureReason,
         usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
       };

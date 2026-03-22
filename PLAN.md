@@ -142,7 +142,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 
 ## Phase P6 - Meal Plan Generation and Refinement
 
-- [ ] P6-S1: Implement meal plan generation service and persistence
+- [x] P6-S1: Implement meal plan generation service and persistence
 	Owner: Coder
 	Depends on: P5-S1, P2-S2, P2-S1
 	Acceptance: The backend can create a structured 1-to-7-day meal plan from a saved profile and request options, validate the generated JSON, and persist plan templates or dated instances in the database.
@@ -235,7 +235,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 ## Review Summary
 
 - Overall status: In progress.
-- Last reviewed item: P5-S3.
+- Last reviewed item: P6-S1.
 - Last review outcome: approved.
 - Review before completion: Required for every step, per .ai/orchestrator.config.json.
 - Maximum coder retries from tester: 2.
@@ -250,7 +250,9 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - P5-S3 is complete and approved; apps/mobile now provides the signed-in onboarding chat and profile confirmation flow, dashboard entry points for empty and existing profiles, structured profile review with explicit allergy notes, and regression coverage for loading, retry, and save/revise race handling.
-- The next actionable step is P6-S1.
+- P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
+- The next actionable step is P6-S2.
+
 
 
 

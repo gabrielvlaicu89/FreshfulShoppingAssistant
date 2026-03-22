@@ -140,6 +140,9 @@ function createClaudeServiceDouble(options: {
       assert.ok(options.extraction);
 
       return options.extraction;
+    },
+    async createMealPlan() {
+      throw new Error("Meal plan generation is not used in onboarding tests.");
     }
   };
 }
@@ -178,6 +181,9 @@ function createQueuedClaudeServiceDouble(
       requestIndex += 1;
 
       return step.extraction;
+    },
+    async createMealPlan() {
+      throw new Error("Meal plan generation is not used in onboarding tests.");
     }
   };
 }

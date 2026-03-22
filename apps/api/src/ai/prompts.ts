@@ -1,5 +1,7 @@
 import type { OnboardingChatMessage } from "@freshful/contracts";
 
+import type { CreatePlanRequest } from "../planner/contracts.js";
+
 export interface ClaudePromptLimits {
   maxTranscriptMessages: number;
   maxPromptChars: number;
@@ -21,6 +23,30 @@ export interface OnboardingReplyPromptInput {
 
 export interface ProfileExtractionPromptInput {
   transcript: OnboardingChatMessage[];
+}
+
+export interface MealPlanPromptInput {
+  profile: {
+    householdType: string;
+    numChildren: number;
+    dietaryRestrictions: string[];
+    allergies: {
+      normalized: string[];
+      freeText: string[];
+    };
+    medicalFlags: {
+      diabetes: boolean;
+      hypertension: boolean;
+    };
+    goals: string[];
+    cuisinePreferences: string[];
+    favoriteIngredients: string[];
+    dislikedIngredients: string[];
+    budgetBand: string;
+    maxPrepTimeMinutes: number;
+    cookingSkill: string;
+  };
+  options: CreatePlanRequest;
 }
 
 const onboardingFieldChecklist = [
@@ -112,5 +138,37 @@ export function assembleProfileExtractionPrompt(
     messages,
     promptChars: measurePrompt(system, messages),
     transcriptMessageCount: transcript.length
+  };
+}
+
+export function assembleMealPlanPrompt(input: MealPlanPromptInput): PromptEnvelope {
+  const system = [
+    "You create structured meal plans for the Freshful Shopping Assistant.",
+    "Return valid JSON only with no markdown fences or explanatory prose.",
+    "The JSON must match this shape exactly: {\"title\":string,\"durationDays\":1..7,\"recipes\":[{\"id\":string,\"title\":string,\"ingredients\":[{\"name\":string,\"quantity\":number,\"unit\":string}],\"instructions\":[string],\"tags\":[string],\"estimatedMacros\":{\"calories\":number,\"proteinGrams\":number,\"carbsGrams\":number,\"fatGrams\":number}}],\"days\":[{\"dayNumber\":1..7,\"meals\":[{\"slot\":\"breakfast|lunch|dinner|snack\",\"recipeId\":string}]}],\"metadata\":{\"tags\":[string],\"estimatedMacros\":{\"calories\":number,\"proteinGrams\":number,\"carbsGrams\":number,\"fatGrams\":number}}}.",
+    "Use exactly the requested durationDays.",
+    "For every day, include each requested meal slot exactly once and no unrequested slots.",
+    "Use concise recipe titles, realistic ingredient quantities, and clear preparation steps.",
+    "Respect dietary restrictions, allergies, health flags, prep-time limits, cooking skill, and stated preferences.",
+    "Do not include userId, templateId, dates, overrides, or any fields outside the required JSON shape."
+  ].join(" ");
+  const userPrompt = [
+    "Generate a meal plan for this saved household profile and planning request.",
+    `Request options: ${JSON.stringify(input.options)}`,
+    `Profile context: ${JSON.stringify(input.profile)}`,
+    "Return only the JSON object."
+  ].join("\n\n");
+  const messages = [
+    {
+      role: "user" as const,
+      content: userPrompt
+    }
+  ];
+
+  return {
+    system,
+    messages,
+    promptChars: measurePrompt(system, messages),
+    transcriptMessageCount: 0
   };
 }

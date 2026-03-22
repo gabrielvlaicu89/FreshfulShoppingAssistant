@@ -6,9 +6,11 @@ export { createAnthropicClient, type ClaudeClient, type ClaudeClientRequest, typ
 export { ClaudeUpstreamError, ClaudeUsageLimitError } from "./ai/errors.js";
 export { parseStructuredResponse, type StructuredParseResult } from "./ai/parser.js";
 export {
+  assembleMealPlanPrompt,
   assembleOnboardingReplyPrompt,
   assembleProfileExtractionPrompt,
   type ClaudePromptLimits,
+  type MealPlanPromptInput,
   type OnboardingReplyPromptInput,
   type ProfileExtractionPromptInput,
   type PromptEnvelope
@@ -28,6 +30,8 @@ export {
   type ClaudeService,
   type ClaudeServiceUsage,
   type CreateClaudeServiceOptions,
+  type MealPlanGenerationRequest,
+  type MealPlanGenerationResponse,
   type OnboardingReplyRequest,
   type OnboardingReplyResponse,
   type ProfileExtractionRequest,
@@ -85,6 +89,29 @@ export {
   type OnboardingTranscriptRepository
 } from "./onboarding/repository.js";
 export { createOnboardingService, type CreateOnboardingServiceOptions, type OnboardingService } from "./onboarding/service.js";
+export {
+  createPlanRequestSchema,
+  createPlanResponseSchema,
+  generatedMealPlanSchema,
+  type CreatePlanRequest,
+  type CreatePlanResponse,
+  type GeneratedMealPlan
+} from "./planner/contracts.js";
+export {
+  createInvalidGeneratedPlanError,
+  createPlannerProfileRequiredError,
+  createPlannerServiceUnavailableError,
+  createPlannerUpstreamError,
+  createPlannerUsageLimitError
+} from "./planner/errors.js";
+export {
+  createPlannerRepository,
+  type CreatePlannerRepositoryOptions,
+  type PersistedPlanResult,
+  type PlannerDatabase,
+  type PlannerRepository
+} from "./planner/repository.js";
+export { createPlannerService, type CreatePlannerServiceOptions, type PlannerService } from "./planner/service.js";
 export {
   partialProfileWriteSchema,
   profileResponseSchema,

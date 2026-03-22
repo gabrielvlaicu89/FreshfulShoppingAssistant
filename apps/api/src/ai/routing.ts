@@ -1,4 +1,4 @@
-export const claudeTaskValues = ["onboarding-turn", "profile-structuring"] as const;
+export const claudeTaskValues = ["onboarding-turn", "profile-structuring", "meal-plan-generation"] as const;
 
 export type ClaudeTask = (typeof claudeTaskValues)[number];
 
@@ -23,6 +23,13 @@ export interface ClaudeRouteDecision {
 }
 
 export function selectClaudeModel(config: ClaudeRoutingConfig, input: ClaudeRouteInput): ClaudeRouteDecision {
+  if (input.task === "meal-plan-generation") {
+    return {
+      tier: "sonnet",
+      reason: "Structured meal plan generation defaults to Sonnet for higher JSON reliability."
+    };
+  }
+
   if (input.task === "profile-structuring") {
     return {
       tier: "sonnet",
