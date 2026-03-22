@@ -87,12 +87,12 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add unit and integration tests for valid, invalid, and expired token cases; run backend auth tests and root validation commands.
 	Review: Approved; reviewer confirmed the Google token verification flow, local user upsert behavior, backend-issued app JWT session boundary, and auth failure handling are correct for the current scope.
 
-- [ ] P3-S3: Implement secure profile read and update endpoints
+- [x] P3-S3: Implement secure profile read and update endpoints
 	Owner: Coder
 	Depends on: P3-S2
 	Acceptance: Authenticated profile fetch and update endpoints persist the structured household profile, protect user isolation, and support encrypted or otherwise explicit handling of sensitive dietary and health-related fields.
 	Tests: Add integration tests for authorized, unauthorized, and validation-failure flows; run root typecheck and test commands.
-	Review: Required; reviewer verifies profile storage matches the shared schemas and privacy requirements.
+	Review: Approved; reviewer confirmed the protected profile routes, user isolation, explicit sensitive-field handling, schema metadata, and validation coverage are aligned for the current backend scope.
 
 ## Phase P4 - Mobile Application Shell and Authenticated Session Flow
 
@@ -250,6 +250,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - The next actionable step is P2-S3.
+
 
 
 

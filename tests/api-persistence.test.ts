@@ -466,6 +466,14 @@ test("generated migrations reject cross-user transcript, template, and shopping 
 
 test("sensitive columns stay explicit in the persistence metadata", () => {
   assert.deepEqual(sensitiveTableColumns.users, ["email"]);
-  assert.ok(sensitiveTableColumns.householdProfiles.includes("medicalFlags"));
+  assert.deepEqual(sensitiveTableColumns.householdProfiles, [
+    "dietaryRestrictions",
+    "allergies",
+    "medicalFlags",
+    "goals",
+    "favoriteIngredients",
+    "dislikedIngredients",
+    "rawChatHistoryId"
+  ]);
   assert.ok(sensitiveTableColumns.onboardingTranscripts.includes("messages"));
 });

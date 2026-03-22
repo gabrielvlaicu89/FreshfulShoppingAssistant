@@ -1,11 +1,21 @@
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 
 import { googleAuthRequestSchema, googleAuthResponseSchema } from "./auth/contracts.js";
-import { createAuthServiceUnavailableError } from "./auth/errors.js";
+import {
+  createAuthServiceUnavailableError,
+  createInvalidAppSessionError,
+  createMissingAppSessionError
+} from "./auth/errors.js";
 import { createGoogleTokenVerifier, type GoogleTokenVerifier } from "./auth/google.js";
 import { createAuthUserRepository, type AuthUserRepository } from "./auth/repository.js";
-import { createAppSessionIssuer, type AppSessionIssuer } from "./auth/session.js";
+import {
+  createAppSessionIssuer,
+  createAppSessionVerifier,
+  type AppSessionIssuer,
+  type AppSessionVerifier,
+  type VerifiedAppSession
+} from "./auth/session.js";
 import { createAuthService, type AuthService } from "./auth/service.js";
 import { type ApiConfig, getApiConfig } from "./config.js";
 import { closeApiDatabase, createApiDatabase } from "./db/client.js";
@@ -21,6 +31,9 @@ import {
   summarizeServiceStates,
   type ApiServices
 } from "./services.js";
+import { profileResponseSchema, profileUpsertResponseSchema, profileWriteSchema } from "./profile/contracts.js";
+import { createHouseholdProfileRepository, type HouseholdProfileRepository } from "./profile/repository.js";
+import { createProfileService, type ProfileService } from "./profile/service.js";
 
 const apiServiceStateSchema = z
   .object({
@@ -67,8 +80,13 @@ export interface CreateApiAppOptions {
   logger?: FastifyServerOptions["logger"];
   auth?: {
     verifier?: GoogleTokenVerifier;
+    sessionVerifier?: AppSessionVerifier;
     userRepository?: AuthUserRepository;
     sessionIssuer?: AppSessionIssuer;
+  };
+  profile?: {
+    repository?: HouseholdProfileRepository;
+    service?: ProfileService;
   };
 }
 
@@ -125,6 +143,30 @@ function isAuthService(value: unknown): value is AuthService {
   return typeof value === "object" && value !== null && "signInWithGoogle" in value;
 }
 
+function isProfileService(value: unknown): value is ProfileService {
+  return typeof value === "object" && value !== null && "getProfile" in value && "upsertProfile" in value;
+}
+
+function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
+  const headerValue = Array.isArray(authorizationHeader) ? authorizationHeader[0] : authorizationHeader;
+
+  if (!headerValue) {
+    throw createMissingAppSessionError();
+  }
+
+  const [scheme, token, ...rest] = headerValue.trim().split(/\s+/u);
+
+  if (scheme?.toLowerCase() !== "bearer" || !token || rest.length > 0) {
+    throw createInvalidAppSessionError();
+  }
+
+  return token;
+}
+
+async function authenticateRequest(request: FastifyRequest, sessionVerifier: AppSessionVerifier): Promise<VerifiedAppSession> {
+  return sessionVerifier.verify(extractBearerToken(request.headers.authorization));
+}
+
 export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance {
   const config = options.config ?? getApiConfig();
   const app = Fastify({
@@ -158,6 +200,25 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
             ttlSeconds: config.session.ttlSeconds
           })
       });
+    const appSessionVerifier =
+      options.auth?.sessionVerifier ??
+      createAppSessionVerifier({
+        issuer: config.session.issuer,
+        secret: config.session.secret
+      });
+    const profileService = isProfileService(options.profile?.service)
+      ? options.profile.service
+      : createProfileService({
+          repository:
+            options.profile?.repository ??
+            createHouseholdProfileRepository(
+              (ownedDatabase ??=
+                createApiDatabase({
+                  databaseUrl: config.databaseUrl,
+                  maxConnections: config.appEnv === "production" ? 5 : 1
+                })).db
+            )
+        });
   const appContext: ApiAppContext = {
     config,
     services: createApiServices({
@@ -238,6 +299,25 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     const detailLevel: "summary" | "full" = query.details ?? "summary";
 
     return createHealthResponse(appContext, detailLevel);
+  });
+
+  app.get("/profile", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const profile = await profileService.getProfile(session.userId);
+
+    return profileResponseSchema.parse({
+      profile
+    });
+  });
+
+  app.put("/profile", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const body = parseRequestPart(profileWriteSchema, request.body, "body");
+    const profile = await profileService.upsertProfile(session.userId, body);
+
+    return profileUpsertResponseSchema.parse({
+      profile
+    });
   });
 
   app.setNotFoundHandler((request, reply) => {

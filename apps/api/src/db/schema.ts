@@ -338,7 +338,7 @@ export const databaseTables = {
 } as const;
 
 export const sensitiveTableColumns = {
-  householdProfiles: ["allergies", "medicalFlags", "favoriteIngredients", "dislikedIngredients", "rawChatHistoryId"],
+  householdProfiles: ["dietaryRestrictions", "allergies", "medicalFlags", "goals", "favoriteIngredients", "dislikedIngredients", "rawChatHistoryId"],
   onboardingTranscripts: ["messages"],
   users: ["email"]
 } as const;

@@ -25,3 +25,29 @@ export function createAuthServiceUnavailableError(): ApiHttpError {
     statusCode: 503
   });
 }
+
+export function createMissingAppSessionError(): ApiHttpError {
+  return new ApiHttpError({
+    code: "auth.missing_app_session",
+    message: "A valid app session bearer token is required.",
+    statusCode: 401
+  });
+}
+
+export function createInvalidAppSessionError(cause?: unknown): ApiHttpError {
+  return new ApiHttpError({
+    code: "auth.invalid_app_session",
+    message: "The app session bearer token is invalid.",
+    statusCode: 401,
+    cause
+  });
+}
+
+export function createExpiredAppSessionError(cause?: unknown): ApiHttpError {
+  return new ApiHttpError({
+    code: "auth.expired_app_session",
+    message: "The app session bearer token has expired.",
+    statusCode: 401,
+    cause
+  });
+}

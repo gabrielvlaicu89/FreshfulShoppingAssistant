@@ -71,6 +71,20 @@ P3-S2 adds server-side Google token verification and local app session issuance:
 
 The issued JWT is intentionally app-scoped rather than a pass-through Google token. It uses the backend-managed `APP_SESSION_SECRET`, includes issuer and expiry claims, and is suitable for later protected-route middleware in P3-S3.
 
+## Profile Endpoints
+
+P3-S3 adds authenticated profile reads and writes:
+
+- `GET /profile` returns the authenticated user's structured household profile or `null` when no profile has been saved yet.
+- `PUT /profile` accepts the shared household profile shape except for server-owned `userId` and `rawChatHistoryId`, which are derived and managed by the backend.
+
+Sensitive-data handling for this step is explicit:
+
+- Dietary restrictions, allergy data, medical flags, and related profile fields stay server-side in the `household_profiles` table.
+- Access is scoped only from the backend-issued app JWT subject; clients do not provide a user ID.
+- When a profile is first created through `PUT /profile`, the backend creates a placeholder transcript record that does not duplicate the sensitive field values. This preserves the current schema contract without copying health-related content into transcript history.
+- Application-level field encryption is not introduced in this step. The current boundary relies on authenticated access control plus database or infrastructure encryption at rest.
+
 To start the backend foundation locally after bootstrapping env files:
 
 - `npm run start --workspace @freshful/api`

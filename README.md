@@ -6,11 +6,12 @@ The repository is no longer just a Copilot starter. It already contains the proj
 
 ## Current Status
 
-- `P1-S1`, `P1-S2`, `P1-S3`, `P2-S1`, and `P2-S2` are complete.
+- `P1-S1`, `P1-S2`, `P1-S3`, `P2-S1`, `P2-S2`, `P2-S3`, `P3-S1`, `P3-S2`, and `P3-S3` are complete.
 - The repo now includes `apps/api`, `apps/mobile`, and `packages/contracts` npm workspaces.
 - Shared domain contracts and runtime schemas live in `@freshful/contracts`.
 - The backend now has PostgreSQL persistence, Drizzle schema definitions, generated migrations, local Docker Compose config, and ownership-safe persistence tests.
 - Repository-level env examples, validated config loaders, and workspace runtime configuration docs are now in place for the API and mobile workspaces.
+- The API workspace now includes the HTTP foundation, Google token verification, app session issuance, and authenticated profile read and update endpoints with explicit sensitive-field handling.
 
 ## Implemented Architecture
 
@@ -122,7 +123,7 @@ The repo still uses the plan-first orchestration flow, but it now operates on a 
 ## What Is Still Placeholder
 
 - The mobile workspace is scaffold-only and does not yet contain the real React Native app shell.
-- The API workspace now has the HTTP foundation plus Google token verification and app session issuance, but it does not yet include protected profile endpoints, AI orchestration, or the Freshful adapter.
+- The API workspace now has the HTTP foundation, Google token verification, app session issuance, and protected profile endpoints, but it does not yet include AI orchestration or the Freshful adapter.
 
 ## Validation Baseline
 

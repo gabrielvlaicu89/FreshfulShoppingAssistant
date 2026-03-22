@@ -1,11 +1,20 @@
 import { randomUUID } from "node:crypto";
 
-import { SignJWT } from "jose";
+import { errors as joseErrors, jwtVerify, SignJWT } from "jose";
 
+import { createExpiredAppSessionError, createInvalidAppSessionError } from "./errors.js";
 import { appSessionSchema, type AppSession, type AuthenticatedUser } from "./contracts.js";
 
 export interface AppSessionIssuer {
   issue(user: AuthenticatedUser): Promise<AppSession>;
+}
+
+export interface VerifiedAppSession {
+  userId: string;
+}
+
+export interface AppSessionVerifier {
+  verify(accessToken: string): Promise<VerifiedAppSession>;
 }
 
 export interface CreateAppSessionIssuerOptions {
@@ -13,6 +22,13 @@ export interface CreateAppSessionIssuerOptions {
   secret: string;
   ttlSeconds: number;
   now?: () => Date;
+}
+
+export interface CreateAppSessionVerifierOptions {
+  issuer: string;
+  secret: string;
+  audience?: string;
+  currentDate?: Date;
 }
 
 export function createAppSessionIssuer(options: CreateAppSessionIssuerOptions): AppSessionIssuer {
@@ -41,6 +57,40 @@ export function createAppSessionIssuer(options: CreateAppSessionIssuerOptions): 
         expiresAt: expiresAt.toISOString(),
         expiresInSeconds: options.ttlSeconds
       });
+    }
+  };
+}
+
+export function createAppSessionVerifier(options: CreateAppSessionVerifierOptions): AppSessionVerifier {
+  const verificationSecret = new TextEncoder().encode(options.secret);
+
+  return {
+    async verify(accessToken: string): Promise<VerifiedAppSession> {
+      try {
+        const verificationResult = await jwtVerify(accessToken, verificationSecret, {
+          issuer: options.issuer,
+          audience: options.audience ?? "freshful-mobile",
+          currentDate: options.currentDate
+        });
+
+        if (verificationResult.payload.sessionKind !== "app" || typeof verificationResult.payload.sub !== "string") {
+          throw createInvalidAppSessionError();
+        }
+
+        return {
+          userId: verificationResult.payload.sub
+        };
+      } catch (error) {
+        if (error instanceof joseErrors.JWTExpired) {
+          throw createExpiredAppSessionError(error);
+        }
+
+        if (error instanceof joseErrors.JOSEError) {
+          throw createInvalidAppSessionError(error);
+        }
+
+        throw error;
+      }
     }
   };
 }
