@@ -16,6 +16,7 @@
     "@freshful/contracts": "0.1.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.44.6",
+    "fastify": "^4.29.1",
     "postgres": "^3.4.7",
     "zod": "^3.25.76"
   },

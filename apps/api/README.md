@@ -47,3 +47,19 @@ Secret handling rules for this workspace:
 - Keep live `DATABASE_URL` and `ANTHROPIC_API_KEY` values in local `.env` files or deployment secret stores only.
 - Commit only `.env.example` templates with placeholder values.
 - Do not mirror third-party secrets into `apps/mobile/.env`; the mobile runtime should only receive safe client-visible values.
+
+## HTTP Foundation
+
+P3-S1 adds a Fastify-based HTTP shell that keeps startup and tests separate:
+
+- `src/app.ts` exports `createApiApp()` so tests can instantiate the server without binding a real port.
+- `src/index.ts` starts the real HTTP server only when the workspace entrypoint is executed directly.
+- `GET /health` provides a smoke-testable readiness endpoint with environment metadata and placeholder service wiring for auth, AI, planner, and Freshful modules.
+- Request and response logging hooks emit structured fields for request ID, method, URL, status code, and duration.
+- Structured error payloads follow the shared contracts package so later modules can fail consistently.
+
+To start the backend foundation locally after bootstrapping env files:
+
+- `npm run start --workspace @freshful/api`
+
+To smoke-test the foundation without a bound port, use the root test suite, which exercises Fastify through `app.inject()`.

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const shutdownSignals = ["SIGINT", "SIGTERM"];
 
 const workspaces = [
   {
@@ -13,13 +14,23 @@ const workspaces = [
   }
 ];
 
+const children = [];
+let shuttingDown = false;
+
 function runWorkspaceStart(workspace) {
   return new Promise((resolve, reject) => {
     const child = spawn(npmCommand, ["run", "start", "--workspace", workspace.name], {
       stdio: "inherit"
     });
 
+    children.push(child);
+
     child.on("exit", (code) => {
+      if (shuttingDown) {
+        resolve();
+        return;
+      }
+
       if (code === 0) {
         resolve();
         return;
@@ -34,10 +45,24 @@ function runWorkspaceStart(workspace) {
   });
 }
 
-console.log("Starting placeholder workspaces for the Freshful Shopping Assistant scaffold.");
+function stopChildren(signal) {
+  shuttingDown = true;
 
-for (const workspace of workspaces) {
-  await runWorkspaceStart(workspace);
+  for (const child of children) {
+    if (!child.killed) {
+      child.kill(signal);
+    }
+  }
 }
 
-console.log("Workspace startup flow finished. The real Fastify API and React Native shell are scheduled for later plan steps.");
+for (const signal of shutdownSignals) {
+  process.once(signal, () => {
+    stopChildren(signal);
+  });
+}
+
+console.log("Starting workspace development processes for the Freshful Shopping Assistant.");
+
+await Promise.all(workspaces.map((workspace) => runWorkspaceStart(workspace)));
+
+console.log("Workspace startup flow finished.");
