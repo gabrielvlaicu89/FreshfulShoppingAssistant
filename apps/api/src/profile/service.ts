@@ -1,11 +1,11 @@
 import type { HouseholdProfile } from "@freshful/contracts";
 
 import type { ProfileWriteInput } from "./contracts.js";
-import type { HouseholdProfileRepository } from "./repository.js";
+import type { HouseholdProfileRepository, ProfileUpsertOptions } from "./repository.js";
 
 export interface ProfileService {
   getProfile(userId: string): Promise<HouseholdProfile | null>;
-  upsertProfile(userId: string, input: ProfileWriteInput): Promise<HouseholdProfile>;
+  upsertProfile(userId: string, input: ProfileWriteInput, options?: ProfileUpsertOptions): Promise<HouseholdProfile>;
 }
 
 export interface CreateProfileServiceOptions {
@@ -18,8 +18,8 @@ export function createProfileService(options: CreateProfileServiceOptions): Prof
       return options.repository.getByUserId(userId);
     },
 
-    upsertProfile(userId: string, input: ProfileWriteInput): Promise<HouseholdProfile> {
-      return options.repository.upsertForUser(userId, input);
+    upsertProfile(userId: string, input: ProfileWriteInput, profileOptions?: ProfileUpsertOptions): Promise<HouseholdProfile> {
+      return options.repository.upsertForUser(userId, input, profileOptions);
     }
   };
 }

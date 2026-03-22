@@ -66,6 +66,26 @@ export type { ApiConfig } from "./config.js";
 export { getDatabaseConfig } from "./db/config.js";
 export { databaseTables, sensitiveTableColumns } from "./db/schema.js";
 export {
+  onboardingChatRequestSchema,
+  onboardingChatResponseSchema,
+  onboardingStructuredProfileSchema,
+  type OnboardingChatRequest,
+  type OnboardingChatResponse,
+  type OnboardingStructuredProfile
+} from "./onboarding/contracts.js";
+export {
+  createOnboardingServiceUnavailableError,
+  createOnboardingUpstreamError,
+  createOnboardingUsageLimitError
+} from "./onboarding/errors.js";
+export {
+  createOnboardingTranscriptRepository,
+  type CreateOnboardingTranscriptRepositoryOptions,
+  type OnboardingDatabase,
+  type OnboardingTranscriptRepository
+} from "./onboarding/repository.js";
+export { createOnboardingService, type CreateOnboardingServiceOptions, type OnboardingService } from "./onboarding/service.js";
+export {
   partialProfileWriteSchema,
   profileResponseSchema,
   profileUpsertResponseSchema,
@@ -79,7 +99,8 @@ export {
   createHouseholdProfileRepository,
   type CreateHouseholdProfileRepositoryOptions,
   type HouseholdProfileRepository,
-  type ProfileDatabase
+  type ProfileDatabase,
+  type ProfileUpsertOptions
 } from "./profile/repository.js";
 export { createProfileService, type CreateProfileServiceOptions, type ProfileService } from "./profile/service.js";
 export { createApiServices, summarizeServiceStates, type ApiServiceModule, type ApiServices, type ApiServiceStatus } from "./services.js";

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "onboarding_transcripts_active_draft_user_idx" ON "onboarding_transcripts" USING btree ("user_id") WHERE "onboarding_transcripts"."household_profile_id" is null;

@@ -126,7 +126,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add unit tests for prompt assembly, model routing, and parser fallback behavior; run backend and root validation commands.
 	Review: Required; reviewer verifies the AI layer is reusable, cost-aware, and does not expose secrets to the mobile app.
 
-- [ ] P5-S2: Add the onboarding chat endpoint that produces transcript and structured profile output
+- [x] P5-S2: Add the onboarding chat endpoint that produces transcript and structured profile output
 	Owner: Coder
 	Depends on: P5-S1, P3-S3, P2-S1
 	Acceptance: The backend onboarding chat endpoint accepts user messages, persists transcript history, returns assistant replies, and emits validated structured profile updates that can be saved to the user record.
@@ -250,6 +250,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P2-S1 is complete and approved; @freshful/contracts now exports shared zod schemas and types for onboarding profiles, meal plans, Freshful products, shopping lists, and API error payloads.
 - P2-S2 is complete and approved; apps/api now has PostgreSQL schema, Drizzle migrations, local compose config, and tested ownership-safe persistence tables for users, profiles, plans, shopping lists, products, and cached search results.
 - The next actionable step is P2-S3.
+
 
 
 

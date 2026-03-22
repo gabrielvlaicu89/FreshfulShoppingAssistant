@@ -14,7 +14,7 @@ import {
   shoppingListItemStatusValues,
   shoppingListStatusValues
 } from "@freshful/contracts";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -75,6 +75,9 @@ export const onboardingTranscripts = pgTable(
   },
   (table) => ({
     userOwnedTranscriptUniqueConstraint: unique("onboarding_transcripts_user_id_id_key").on(table.userId, table.id),
+    activeDraftUserUniqueIndex: uniqueIndex("onboarding_transcripts_active_draft_user_idx")
+      .on(table.userId)
+      .where(sql`${table.householdProfileId} is null`),
     userIdIndex: index("onboarding_transcripts_user_id_idx").on(table.userId)
   })
 );

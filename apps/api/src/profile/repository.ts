@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { HouseholdProfile, OnboardingTranscript } from "@freshful/contracts";
 import { householdProfileSchema } from "@freshful/contracts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { createApiDatabase } from "../db/client.js";
 import { databaseTables } from "../db/schema.js";
@@ -12,11 +12,15 @@ export type ProfileDatabase = ReturnType<typeof createApiDatabase>["db"];
 
 export interface HouseholdProfileRepository {
   getByUserId(userId: string): Promise<HouseholdProfile | null>;
-  upsertForUser(userId: string, input: ProfileWriteInput): Promise<HouseholdProfile>;
+  upsertForUser(userId: string, input: ProfileWriteInput, options?: ProfileUpsertOptions): Promise<HouseholdProfile>;
 }
 
 export interface CreateHouseholdProfileRepositoryOptions {
   now?: () => Date;
+}
+
+export interface ProfileUpsertOptions {
+  rawChatHistoryId?: string;
 }
 
 function buildProfilePlaceholderTranscript(createdAt: string): OnboardingTranscript["messages"] {
@@ -92,7 +96,7 @@ export function createHouseholdProfileRepository(
       return profile ? toHouseholdProfile(profile) : null;
     },
 
-    async upsertForUser(userId: string, input: ProfileWriteInput): Promise<HouseholdProfile> {
+    async upsertForUser(userId: string, input: ProfileWriteInput, options: ProfileUpsertOptions = {}): Promise<HouseholdProfile> {
       return database.transaction(async (transaction) => {
         const [existingProfile] = await transaction
           .select({
@@ -104,6 +108,27 @@ export function createHouseholdProfileRepository(
           .limit(1);
         const updatedAt = now().toISOString();
         let rawChatHistoryId = existingProfile?.rawChatHistoryId;
+
+        if (options.rawChatHistoryId) {
+          const [ownedTranscript] = await transaction
+            .select({
+              id: databaseTables.onboardingTranscripts.id
+            })
+            .from(databaseTables.onboardingTranscripts)
+            .where(
+              and(
+                eq(databaseTables.onboardingTranscripts.userId, userId),
+                eq(databaseTables.onboardingTranscripts.id, options.rawChatHistoryId)
+              )
+            )
+            .limit(1);
+
+          if (!ownedTranscript) {
+            throw new Error(`Onboarding transcript '${options.rawChatHistoryId}' does not belong to user '${userId}'.`);
+          }
+
+          rawChatHistoryId = ownedTranscript.id;
+        }
 
         if (!rawChatHistoryId) {
           rawChatHistoryId = randomUUID();
@@ -157,6 +182,7 @@ export function createHouseholdProfileRepository(
             }
           })
           .returning({
+            id: databaseTables.householdProfiles.id,
             userId: databaseTables.householdProfiles.userId,
             householdType: databaseTables.householdProfiles.householdType,
             numChildren: databaseTables.householdProfiles.numChildren,
@@ -173,7 +199,35 @@ export function createHouseholdProfileRepository(
             rawChatHistoryId: databaseTables.householdProfiles.rawChatHistoryId
           });
 
-        return toHouseholdProfile(profile);
+        await transaction
+          .update(databaseTables.onboardingTranscripts)
+          .set({
+            householdProfileId: profile.id,
+            updatedAt
+          })
+          .where(
+            and(
+              eq(databaseTables.onboardingTranscripts.userId, userId),
+              eq(databaseTables.onboardingTranscripts.id, rawChatHistoryId)
+            )
+          );
+
+        return toHouseholdProfile({
+          userId: profile.userId,
+          householdType: profile.householdType,
+          numChildren: profile.numChildren,
+          dietaryRestrictions: profile.dietaryRestrictions,
+          allergies: profile.allergies,
+          medicalFlags: profile.medicalFlags,
+          goals: profile.goals,
+          cuisinePreferences: profile.cuisinePreferences,
+          favoriteIngredients: profile.favoriteIngredients,
+          dislikedIngredients: profile.dislikedIngredients,
+          budgetBand: profile.budgetBand,
+          maxPrepTimeMinutes: profile.maxPrepTimeMinutes,
+          cookingSkill: profile.cookingSkill,
+          rawChatHistoryId: profile.rawChatHistoryId
+        });
       });
     }
   };

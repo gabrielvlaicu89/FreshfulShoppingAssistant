@@ -32,6 +32,9 @@ import {
   summarizeServiceStates,
   type ApiServices
 } from "./services.js";
+import { onboardingChatRequestSchema, onboardingChatResponseSchema } from "./onboarding/contracts.js";
+import { createOnboardingTranscriptRepository, type OnboardingTranscriptRepository } from "./onboarding/repository.js";
+import { createOnboardingService, type OnboardingService } from "./onboarding/service.js";
 import { profileResponseSchema, profileUpsertResponseSchema, profileWriteSchema } from "./profile/contracts.js";
 import { createHouseholdProfileRepository, type HouseholdProfileRepository } from "./profile/repository.js";
 import { createProfileService, type ProfileService } from "./profile/service.js";
@@ -88,6 +91,10 @@ export interface CreateApiAppOptions {
   profile?: {
     repository?: HouseholdProfileRepository;
     service?: ProfileService;
+  };
+  onboarding?: {
+    repository?: OnboardingTranscriptRepository;
+    service?: OnboardingService;
   };
 }
 
@@ -152,6 +159,10 @@ function isClaudeService(value: unknown): value is ClaudeService {
   return typeof value === "object" && value !== null && "createOnboardingReply" in value && "extractProfile" in value;
 }
 
+function isOnboardingService(value: unknown): value is OnboardingService {
+  return typeof value === "object" && value !== null && "sendMessage" in value;
+}
+
 function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
   const headerValue = Array.isArray(authorizationHeader) ? authorizationHeader[0] : authorizationHeader;
 
@@ -212,25 +223,40 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
             ttlSeconds: config.session.ttlSeconds
           })
       });
-    const appSessionVerifier =
-      options.auth?.sessionVerifier ??
-      createAppSessionVerifier({
-        issuer: config.session.issuer,
-        secret: config.session.secret
+  const appSessionVerifier =
+    options.auth?.sessionVerifier ??
+    createAppSessionVerifier({
+      issuer: config.session.issuer,
+      secret: config.session.secret
+    });
+  const profileService = isProfileService(options.profile?.service)
+    ? options.profile.service
+    : createProfileService({
+        repository:
+          options.profile?.repository ??
+          createHouseholdProfileRepository(
+            (ownedDatabase ??=
+              createApiDatabase({
+                databaseUrl: config.databaseUrl,
+                maxConnections: config.appEnv === "production" ? 5 : 1
+              })).db
+          )
       });
-    const profileService = isProfileService(options.profile?.service)
-      ? options.profile.service
-      : createProfileService({
-          repository:
-            options.profile?.repository ??
-            createHouseholdProfileRepository(
-              (ownedDatabase ??=
-                createApiDatabase({
-                  databaseUrl: config.databaseUrl,
-                  maxConnections: config.appEnv === "production" ? 5 : 1
-                })).db
-            )
-        });
+  const onboardingService = isOnboardingService(options.onboarding?.service)
+    ? options.onboarding.service
+    : createOnboardingService({
+        repository:
+          options.onboarding?.repository ??
+          createOnboardingTranscriptRepository(
+            (ownedDatabase ??=
+              createApiDatabase({
+                databaseUrl: config.databaseUrl,
+                maxConnections: config.appEnv === "production" ? 5 : 1
+              })).db
+          ),
+        profileService,
+        aiService: aiImplementation
+      });
   const appContext: ApiAppContext = {
     config,
     services: createApiServices({
@@ -335,6 +361,13 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     return profileUpsertResponseSchema.parse({
       profile
     });
+  });
+
+  app.post("/ai/onboarding-chat", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const body = parseRequestPart(onboardingChatRequestSchema, request.body, "body");
+
+    return onboardingChatResponseSchema.parse(await onboardingService.sendMessage(session.userId, body));
   });
 
   app.setNotFoundHandler((request, reply) => {
