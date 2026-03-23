@@ -1,8 +1,88 @@
 import type React from "react";
 
 import "@testing-library/jest-native/extend-expect";
-import { act } from "@testing-library/react-native";
+import { act, cleanup } from "@testing-library/react-native";
 import { notifyManager } from "@tanstack/react-query";
+
+const activeTimeouts = new Set<ReturnType<typeof global.setTimeout>>();
+const activeIntervals = new Set<ReturnType<typeof global.setInterval>>();
+const activeImmediates = new Set<ReturnType<typeof global.setImmediate>>();
+
+const originalSetTimeout = global.setTimeout.bind(global);
+const originalClearTimeout = global.clearTimeout.bind(global);
+const originalSetInterval = global.setInterval.bind(global);
+const originalClearInterval = global.clearInterval.bind(global);
+const originalSetImmediate = global.setImmediate.bind(global);
+const originalClearImmediate = global.clearImmediate.bind(global);
+
+global.setTimeout = ((callback: (...args: Array<unknown>) => void, delay?: number, ...args: Array<unknown>) => {
+  const timeoutHandle = originalSetTimeout(() => {
+    activeTimeouts.delete(timeoutHandle);
+    callback(...args);
+  }, delay);
+
+  activeTimeouts.add(timeoutHandle);
+
+  return timeoutHandle;
+}) as typeof global.setTimeout;
+
+global.clearTimeout = ((timeoutHandle: ReturnType<typeof global.setTimeout>) => {
+  activeTimeouts.delete(timeoutHandle);
+
+  return originalClearTimeout(timeoutHandle);
+}) as typeof global.clearTimeout;
+
+global.setInterval = ((callback: (...args: Array<unknown>) => void, delay?: number, ...args: Array<unknown>) => {
+  const intervalHandle = originalSetInterval(() => {
+    callback(...args);
+  }, delay);
+
+  activeIntervals.add(intervalHandle);
+
+  return intervalHandle;
+}) as typeof global.setInterval;
+
+global.clearInterval = ((intervalHandle: ReturnType<typeof global.setInterval>) => {
+  activeIntervals.delete(intervalHandle);
+
+  return originalClearInterval(intervalHandle);
+}) as typeof global.clearInterval;
+
+global.setImmediate = ((callback: (...args: Array<unknown>) => void, ...args: Array<unknown>) => {
+  const immediateHandle = originalSetImmediate(() => {
+    activeImmediates.delete(immediateHandle);
+    callback(...args);
+  });
+
+  activeImmediates.add(immediateHandle);
+
+  return immediateHandle;
+}) as typeof global.setImmediate;
+
+global.clearImmediate = ((immediateHandle: ReturnType<typeof global.setImmediate>) => {
+  activeImmediates.delete(immediateHandle);
+
+  return originalClearImmediate(immediateHandle);
+}) as typeof global.clearImmediate;
+
+afterEach(() => {
+  cleanup();
+
+  for (const timeoutHandle of activeTimeouts) {
+    originalClearTimeout(timeoutHandle);
+  }
+  activeTimeouts.clear();
+
+  for (const intervalHandle of activeIntervals) {
+    originalClearInterval(intervalHandle);
+  }
+  activeIntervals.clear();
+
+  for (const immediateHandle of activeImmediates) {
+    originalClearImmediate(immediateHandle);
+  }
+  activeImmediates.clear();
+});
 
 notifyManager.setNotifyFunction((callback) => {
   act(() => {
@@ -71,6 +151,10 @@ jest.mock("react-native-screens", () => {
 jest.mock("@react-navigation/native-stack", () => {
   const React = jest.requireActual<typeof import("react")>("react");
 
+  function toObjectRecord(value: unknown): Record<string, unknown> {
+    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  }
+
   return {
     createNativeStackNavigator: () => {
       function Navigator({ children, initialRouteName }: { children?: React.ReactNode; initialRouteName?: string }) {
@@ -81,30 +165,56 @@ jest.mock("@react-navigation/native-stack", () => {
           };
         }>;
         const initialScreenName = initialRouteName ?? screens[0]?.props.name;
-        const [routeName, setRouteName] = React.useState(initialScreenName);
-        const activeScreen = screens.find((screen) => screen.props.name === routeName) ?? screens[0];
+        const [routeState, setRouteState] = React.useState<{
+          name: string;
+          params: unknown;
+        }>({
+          name: initialScreenName,
+          params: undefined
+        });
+        const activeScreen = screens.find((screen) => screen.props.name === routeState.name) ?? screens[0];
         const ScreenComponent = activeScreen.props.component as React.ComponentType<{
           navigation: {
-            navigate: (nextRouteName: string) => void;
-            replace: (nextRouteName: string) => void;
+            navigate: (nextRouteName: string | { name: string; params?: unknown; merge?: boolean }) => void;
+            replace: (nextRouteName: string | { name: string; params?: unknown }) => void;
           };
           route: {
             key: string | undefined;
             name: string | undefined;
-            params: undefined;
+            params: unknown;
           };
         }>;
         const navigation = {
-          navigate: (nextRouteName: string) => setRouteName(nextRouteName),
-          replace: (nextRouteName: string) => setRouteName(nextRouteName)
+          navigate: (nextRouteName: string | { name: string; params?: unknown; merge?: boolean }) => {
+            if (typeof nextRouteName === "string") {
+              setRouteState({ name: nextRouteName, params: undefined });
+              return;
+            }
+
+            setRouteState((currentState) => ({
+              name: nextRouteName.name,
+              params:
+                nextRouteName.merge && currentState.name === nextRouteName.name
+                  ? { ...toObjectRecord(currentState.params), ...toObjectRecord(nextRouteName.params) }
+                  : nextRouteName.params
+            }));
+          },
+          replace: (nextRouteName: string | { name: string; params?: unknown }) => {
+            if (typeof nextRouteName === "string") {
+              setRouteState({ name: nextRouteName, params: undefined });
+              return;
+            }
+
+            setRouteState({ name: nextRouteName.name, params: nextRouteName.params });
+          }
         };
 
         return React.createElement(ScreenComponent, {
           navigation,
           route: {
-            key: routeName,
-            name: routeName,
-            params: undefined
+            key: routeState.name,
+            name: routeState.name,
+            params: routeState.params
           }
         });
       }

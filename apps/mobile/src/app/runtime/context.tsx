@@ -2,11 +2,13 @@ import React from "react";
 
 import type { MobileConfig } from "../../config";
 import type { ApiClient } from "../api/client";
+import type { PlannerCacheStorage } from "../planner/cache-storage";
 import type { ProfileCacheStorage } from "../profile/cache-storage";
 
 export interface AppRuntimeValue {
   config: MobileConfig;
   apiClient: ApiClient;
+  plannerCacheStorage: PlannerCacheStorage;
   profileCacheStorage: ProfileCacheStorage;
 }
 

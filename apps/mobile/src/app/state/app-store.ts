@@ -8,9 +8,12 @@ export interface AssistantShellState {
   hasSeenWelcome: boolean;
   planDays: PlanDuration;
   includedMeals: MealSlot[];
+  lastSavedPlanId: string | null;
   markWelcomeSeen(): void;
   setPlanDays(planDays: PlanDuration): void;
+  setLastSavedPlanId(planId: string | null): void;
   toggleMeal(mealSlot: MealSlot): void;
+  rememberLastSavedPlan(planId: string): void;
   reset(): void;
 }
 
@@ -20,7 +23,8 @@ function createInitialState() {
   return {
     hasSeenWelcome: false,
     planDays: 3 as PlanDuration,
-    includedMeals: defaultIncludedMeals
+    includedMeals: defaultIncludedMeals,
+    lastSavedPlanId: null
   };
 }
 
@@ -31,6 +35,9 @@ export const useAssistantShellStore = create<AssistantShellState>((set) => ({
   },
   setPlanDays(planDays) {
     set({ planDays });
+  },
+  setLastSavedPlanId(planId) {
+    set({ lastSavedPlanId: planId });
   },
   toggleMeal(mealSlot) {
     set((state) => {
@@ -44,6 +51,9 @@ export const useAssistantShellStore = create<AssistantShellState>((set) => ({
         includedMeals: orderedMeals.length > 0 ? orderedMeals : defaultIncludedMeals
       };
     });
+  },
+  rememberLastSavedPlan(planId) {
+    set({ lastSavedPlanId: planId });
   },
   reset() {
     set(createInitialState());

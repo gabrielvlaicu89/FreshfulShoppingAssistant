@@ -58,6 +58,7 @@ function getProfileStatusLabel(dataSource: ReturnType<typeof useProfileSummary>[
 export function DashboardScreen({ navigation }: Props): React.JSX.Element {
   const planDays = useAssistantShellStore((state) => state.planDays);
   const includedMeals = useAssistantShellStore((state) => state.includedMeals);
+  const lastSavedPlanId = useAssistantShellStore((state) => state.lastSavedPlanId);
   const auth = useAuth();
   const profileSummary = useProfileSummary();
   const profile = profileSummary.profile;
@@ -133,11 +134,28 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
         <AppText variant="title">Planning</AppText>
         <AppText variant="bodyMuted">
           {profile
-            ? `${formatDraftLabel(planDays)} with ${includedMeals.join(", ")}. This is still a local planning stub until meal plan generation lands.`
-            : "Finish onboarding first so future plans can use your captured household profile."}
+            ? lastSavedPlanId
+              ? `Latest request: ${formatDraftLabel(planDays)} with ${includedMeals.join(", ")}. Reopen your last saved plan or generate a new one from the mobile planner.`
+              : `${formatDraftLabel(planDays)} with ${includedMeals.join(", ")}. Generate a saved plan and refine it with AI from the mobile planner.`
+            : lastSavedPlanId
+              ? "Your household profile is unavailable right now, but you can still reopen the last saved plan while profile sync recovers."
+              : "Finish onboarding first so future plans can use your captured household profile."}
         </AppText>
         <View style={styles.actionsRow}>
           <Button label={profile ? "Plan next meals" : "Finish onboarding first"} onPress={() => navigation.navigate(profile ? "PlannerPreview" : "Onboarding")} />
+          {lastSavedPlanId ? (
+            <Button
+              label="View last saved plan"
+              variant="ghost"
+              onPress={() =>
+                navigation.navigate({
+                  name: "PlannerPreview",
+                  params: { planId: lastSavedPlanId, reopenedAt: Date.now() },
+                  merge: true
+                })
+              }
+            />
+          ) : null}
         </View>
       </Card>
 

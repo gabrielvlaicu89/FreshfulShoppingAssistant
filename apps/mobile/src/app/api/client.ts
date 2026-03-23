@@ -7,6 +7,9 @@ import {
   healthGoalValues,
   householdProfileSchema,
   householdTypeValues,
+  mealPlanInstanceSchema,
+  mealPlanTemplateSchema,
+  mealSlotValues,
   medicalFlagsSchema,
   onboardingChatMessageSchema,
   onboardingTranscriptSchema,
@@ -93,10 +96,48 @@ const profileUpsertResponseSchema = z
   })
   .strict();
 
+export const createPlanRequestSchema = z
+  .object({
+    durationDays: z.number().int().min(1).max(7),
+    mealSlots: z.array(z.enum(mealSlotValues)).min(1)
+  })
+  .strict();
+
+const planRevisionSchema = z
+  .object({
+    templateId: z.string().trim().min(1),
+    parentTemplateId: z.string().trim().min(1).nullable(),
+    title: z.string().trim().min(1),
+    createdAt: z.string().datetime(),
+    instanceId: z.string().trim().min(1).nullable(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).nullable(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).nullable()
+  })
+  .strict();
+
+const createPlanResponseSchema = z
+  .object({
+    template: mealPlanTemplateSchema,
+    instance: mealPlanInstanceSchema.nullable()
+  })
+  .strict();
+
+const planDetailResponseSchema = z
+  .object({
+    template: mealPlanTemplateSchema,
+    instance: mealPlanInstanceSchema.nullable(),
+    revisionHistory: z.array(planRevisionSchema).min(1)
+  })
+  .strict();
+
 export type AssistantHealth = z.infer<typeof assistantHealthSchema>;
+export type CreatePlanRequest = z.infer<typeof createPlanRequestSchema>;
+export type CreatePlanResponse = z.infer<typeof createPlanResponseSchema>;
 export type EditableProfile = z.infer<typeof editableProfileSchema>;
 export type PartialEditableProfile = z.infer<typeof partialEditableProfileSchema>;
 export type OnboardingStructuredProfile = z.infer<typeof onboardingStructuredProfileSchema>;
+export type PlanDetailResponse = z.infer<typeof planDetailResponseSchema>;
+export type PlanRevision = z.infer<typeof planRevisionSchema>;
 
 export interface OnboardingChatResponse {
   transcript: OnboardingTranscript;
@@ -111,6 +152,9 @@ export interface ApiClient {
   getProfile(accessToken: string): Promise<HouseholdProfile | null>;
   updateProfile(accessToken: string, profile: EditableProfile): Promise<HouseholdProfile>;
   sendOnboardingMessage(accessToken: string, message: string): Promise<OnboardingChatResponse>;
+  createPlan(accessToken: string, input: CreatePlanRequest): Promise<CreatePlanResponse>;
+  getPlan(accessToken: string, planId: string): Promise<PlanDetailResponse>;
+  refinePlan(accessToken: string, planId: string, prompt: string): Promise<PlanDetailResponse>;
 }
 
 function createRequestUrl(baseUrl: string, pathname: string): string {
@@ -227,6 +271,49 @@ export function createApiClient(config: MobileConfig): ApiClient {
           body: JSON.stringify({ message })
         },
         onboardingChatResponseSchema
+      );
+    },
+    async createPlan(accessToken, input) {
+      return requestJson(
+        config,
+        "plans",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(createPlanRequestSchema.parse(input))
+        },
+        createPlanResponseSchema
+      );
+    },
+    async getPlan(accessToken, planId) {
+      return requestJson(
+        config,
+        `plans/${encodeURIComponent(planId)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        },
+        planDetailResponseSchema
+      );
+    },
+    async refinePlan(accessToken, planId, prompt) {
+      return requestJson(
+        config,
+        `plans/${encodeURIComponent(planId)}/refine`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ prompt })
+        },
+        planDetailResponseSchema
       );
     }
   };

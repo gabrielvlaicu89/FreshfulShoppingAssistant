@@ -156,7 +156,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add integration tests for fetch, refine, and revision-history flows; run backend and root validation commands.
 	Review: Required; reviewer verifies refinements are traceable and user-scoped.
 
-- [ ] P6-S3: Build the mobile plan creation, detail, and refine experience
+- [x] P6-S3: Build the mobile plan creation, detail, and refine experience
 	Owner: Coder
 	Depends on: P6-S2, P4-S3
 	Acceptance: Users can request a plan horizon and meal types, view a generated plan by day and meal slot, and submit refinement prompts from the app with visible loading, failure, and revision states.
@@ -165,7 +165,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 
 ## Phase P7 - Freshful Catalogue Integration
 
-- [ ] P7-S1: Capture the Freshful integration contract and reverse-engineering findings
+- [x] P7-S1: Capture the Freshful integration contract and reverse-engineering findings
 	Owner: Coder
 	Depends on: P1-S1
 	Acceptance: A backend-facing integration note or module README documents the discovered Freshful search and product-detail request patterns, anti-fragility constraints, caching expectations, and the normalized adapter interface used by the product code.
@@ -253,6 +253,8 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
+
 
 
 
