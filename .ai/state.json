@@ -1,13 +1,18 @@
 {
   "planningStatus": "in-progress",
-  "currentStepId": "P8-S1",
-  "lastCompletedItemId": "P7-S3",
-  "lastReviewedItemId": "P7-S3",
+  "currentStepId": "P8-S2",
+  "lastCompletedItemId": "P8-S1",
+  "lastReviewedItemId": "P8-S1",
   "lastReviewOutcome": "approved",
   "lastCommitMessage": null,
   "lastPushAttempt": null,
   "phaseCommits": [],
   "recentNotes": [
+    {
+      "timestamp": "2026-03-23T14:08:10.099Z",
+      "stepId": "P8-S1",
+      "note": "P8-S1 accepted after shopping-list draft validation and review; apps/api now aggregates meal-plan ingredients deterministically, normalizes a bounded v1 unit set, persists one active shopping-list draft per user and dated plan instance, and exposes authenticated draft generation and retrieval routes with concurrency-safe refresh behavior."
+    },
     {
       "timestamp": "2026-03-23T13:16:03.101Z",
       "stepId": "P7-S3",
@@ -52,17 +57,12 @@
       "timestamp": "2026-03-22T18:56:24.776Z",
       "stepId": "P5-S1",
       "note": "P5-S1 accepted after backend AI foundation validation and review; apps/api now provides a reusable Claude client, prompt templates, model routing, parser fallback, optional Anthropic startup wiring, and validated partial-profile extraction for incomplete onboarding transcripts without fabricating sensitive fields."
-    },
-    {
-      "timestamp": "2026-03-22T18:28:11.459Z",
-      "stepId": "P4-S3",
-      "note": "P4-S3 accepted after mobile dashboard validation and review; apps/mobile now fetches the authenticated backend profile for the signed-in home screen, shows placeholder planning and shopping actions, and caches only a non-sensitive dashboard summary locally for offline-friendly relaunches while live null responses clear stale cache."
     }
   ],
   "lastRun": {
-    "timestamp": "2026-03-23T13:16:03.101Z",
+    "timestamp": "2026-03-23T14:08:10.099Z",
     "agent": "orchestrator",
-    "action": "update-progress:P7-S3",
+    "action": "update-progress:P8-S1",
     "status": "done"
   }
 }

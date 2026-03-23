@@ -210,6 +210,27 @@ export {
   type ProfileUpsertOptions
 } from "./profile/repository.js";
 export { createProfileService, type CreateProfileServiceOptions, type ProfileService } from "./profile/service.js";
+export { aggregateIngredientsFromPlan, type AggregatedShoppingIngredient } from "./shopping/aggregation.js";
+export {
+  shoppingListParamsSchema,
+  shoppingListResponseSchema,
+  type ShoppingListParams
+} from "./shopping/contracts.js";
+export {
+  createShoppingListNotFoundError,
+  createShoppingListPlanInstanceRequiredError
+} from "./shopping/errors.js";
+export {
+  createShoppingListRepository,
+  type CreateShoppingListRepositoryOptions,
+  type ShoppingDatabase,
+  type ShoppingListRepository
+} from "./shopping/repository.js";
+export {
+  createShoppingListService,
+  type CreateShoppingListServiceOptions,
+  type ShoppingListService
+} from "./shopping/service.js";
 export { createApiServices, summarizeServiceStates, type ApiServiceModule, type ApiServices, type ApiServiceStatus } from "./services.js";
 
 const defaultApiWorkspace = {

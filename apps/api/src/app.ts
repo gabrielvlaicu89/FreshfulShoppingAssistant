@@ -51,6 +51,9 @@ import { createPlannerService, type PlannerService } from "./planner/service.js"
 import { profileResponseSchema, profileUpsertResponseSchema, profileWriteSchema } from "./profile/contracts.js";
 import { createHouseholdProfileRepository, type HouseholdProfileRepository } from "./profile/repository.js";
 import { createProfileService, type ProfileService } from "./profile/service.js";
+import { shoppingListParamsSchema, shoppingListResponseSchema } from "./shopping/contracts.js";
+import { createShoppingListRepository, type ShoppingListRepository } from "./shopping/repository.js";
+import { createShoppingListService, type ShoppingListService } from "./shopping/service.js";
 
 const apiServiceStateSchema = z
   .object({
@@ -117,6 +120,10 @@ export interface CreateApiAppOptions {
     client?: FreshfulCatalogClient;
     repository?: FreshfulCatalogRepository;
     service?: FreshfulCatalogAdapter;
+  };
+  shopping?: {
+    repository?: ShoppingListRepository;
+    service?: ShoppingListService;
   };
 }
 
@@ -197,6 +204,10 @@ function isPlannerService(value: unknown): value is PlannerService {
 
 function isFreshfulCatalogService(value: unknown): value is FreshfulCatalogAdapter {
   return typeof value === "object" && value !== null && "searchProducts" in value && "getProductDetails" in value;
+}
+
+function isShoppingListService(value: unknown): value is ShoppingListService {
+  return typeof value === "object" && value !== null && "createDraftForPlan" in value && "getShoppingList" in value;
 }
 
 function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
@@ -326,6 +337,20 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
           repository: freshfulRepository,
           client: options.freshful?.client ?? createFreshfulCatalogClient({ config: config.freshful })
         });
+  const shoppingService = isShoppingListService(options.shopping?.service)
+    ? options.shopping.service
+    : createShoppingListService({
+        repository:
+          options.shopping?.repository ??
+          createShoppingListRepository(
+            (ownedDatabase ??=
+              createApiDatabase({
+                databaseUrl: config.databaseUrl,
+                maxConnections: config.appEnv === "production" ? 5 : 1
+              })).db
+          ),
+        plannerService
+      });
   const appContext: ApiAppContext = {
     config,
     services: createApiServices({
@@ -469,6 +494,20 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     const body = parseRequestPart(refinePlanRequestSchema, request.body, "body");
 
     return planDetailResponseSchema.parse(await plannerService.refinePlan(session.userId, params.id, body));
+  });
+
+  app.post("/plans/:id/shopping-list", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const params = parseRequestPart(planParamsSchema, request.params, "params");
+
+    return shoppingListResponseSchema.parse(await shoppingService.createDraftForPlan(session.userId, params.id));
+  });
+
+  app.get("/shopping-lists/:id", async (request) => {
+    const session = await authenticateRequest(request, appSessionVerifier);
+    const params = parseRequestPart(shoppingListParamsSchema, request.params, "params");
+
+    return shoppingListResponseSchema.parse(await shoppingService.getShoppingList(session.userId, params.id));
   });
 
   app.setNotFoundHandler((request, reply) => {

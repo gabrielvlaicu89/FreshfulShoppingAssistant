@@ -50,6 +50,13 @@
       "when": 1774267113749,
       "tag": "0006_solid_detail_cache_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774273672963,
+      "tag": "0007_silent_albert_cleary",
+      "breakpoints": true
     }
   ]
 }

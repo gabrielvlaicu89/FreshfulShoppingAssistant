@@ -219,6 +219,9 @@ export const shoppingLists = pgTable(
       foreignColumns: [mealPlanInstances.userId, mealPlanInstances.id],
       name: "shopping_lists_user_id_plan_owner_fk"
     }),
+    activeDraftUserPlanUniqueIndex: uniqueIndex("shopping_lists_active_draft_user_plan_idx")
+      .on(table.userId, table.planId)
+      .where(sql`${table.status} = 'draft'`),
     userIdIndex: index("shopping_lists_user_id_idx").on(table.userId),
     planIdIndex: index("shopping_lists_plan_id_idx").on(table.planId)
   })
