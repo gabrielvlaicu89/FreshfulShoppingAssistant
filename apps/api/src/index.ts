@@ -10,11 +10,13 @@ export {
   assembleMealPlanRefinementPrompt,
   assembleOnboardingReplyPrompt,
   assembleProfileExtractionPrompt,
+  assembleShoppingProductSelectionPrompt,
   type ClaudePromptLimits,
   type MealPlanPromptInput,
   type MealPlanRefinementPromptInput,
   type OnboardingReplyPromptInput,
   type ProfileExtractionPromptInput,
+  type ShoppingProductSelectionPromptInput,
   type PromptEnvelope
 } from "./ai/prompts.js";
 export {
@@ -39,7 +41,9 @@ export {
   type OnboardingReplyRequest,
   type OnboardingReplyResponse,
   type ProfileExtractionRequest,
-  type ProfileExtractionResponse
+  type ProfileExtractionResponse,
+  type ShoppingProductSelectionRequest,
+  type ShoppingProductSelectionResponse
 } from "./ai/service.js";
 export {
   googleAuthRequestSchema,
@@ -211,6 +215,7 @@ export {
 } from "./profile/repository.js";
 export { createProfileService, type CreateProfileServiceOptions, type ProfileService } from "./profile/service.js";
 export { aggregateIngredientsFromPlan, type AggregatedShoppingIngredient } from "./shopping/aggregation.js";
+export { resolveShoppingListItems, type ResolveShoppingListItemsOptions, type ResolvedShoppingListItemInput } from "./shopping/matching.js";
 export {
   shoppingListParamsSchema,
   shoppingListResponseSchema,

@@ -6,7 +6,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { createApiDatabase } from "../db/client.js";
 import { databaseTables } from "../db/schema.js";
-import type { AggregatedShoppingIngredient } from "./aggregation.js";
+import type { ResolvedShoppingListItemInput } from "./matching.js";
 
 export type ShoppingDatabase = ReturnType<typeof createApiDatabase>["db"];
 
@@ -38,6 +38,8 @@ interface ShoppingListItemRecord {
   chosenUnit: string | null;
   estimatedPrice: number | null;
   category: string | null;
+  resolutionSource: "deterministic" | "ai" | "unresolved";
+  resolutionReason: string;
   status: "pending" | "bought" | "replaced";
 }
 
@@ -48,8 +50,12 @@ export interface CreateShoppingListRepositoryOptions {
 }
 
 export interface ShoppingListRepository {
-  upsertDraftForPlan(userId: string, planInstanceId: string, items: AggregatedShoppingIngredient[]): Promise<ShoppingList>;
+  upsertDraftForPlan(userId: string, planInstanceId: string, items: ResolvedShoppingListItemInput[]): Promise<ShoppingList>;
   getForUser(userId: string, listId: string): Promise<ShoppingList | null>;
+}
+
+function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function toUtcIsoDateTime(value: string): string {
@@ -132,6 +138,8 @@ async function loadShoppingListItems(
       chosenUnit: databaseTables.shoppingListItems.chosenUnit,
       estimatedPrice: databaseTables.shoppingListItems.estimatedPrice,
       category: databaseTables.shoppingListItems.category,
+      resolutionSource: databaseTables.shoppingListItems.resolutionSource,
+      resolutionReason: databaseTables.shoppingListItems.resolutionReason,
       status: databaseTables.shoppingListItems.status
     })
     .from(databaseTables.shoppingListItems)
@@ -218,6 +226,8 @@ async function hydrateShoppingList(
     chosenUnit: record.chosenUnit,
     estimatedPrice: record.estimatedPrice,
     category: record.category,
+    resolutionSource: record.resolutionSource,
+    resolutionReason: record.resolutionReason,
     status: record.status,
     matchedProduct: record.freshfulProductId ? matchedProducts.get(record.freshfulProductId) ?? null : null
   }));
@@ -254,13 +264,16 @@ export function createShoppingListRepository(
           const shoppingList = await database.transaction(async (transaction) => {
             const timestamp = now().toISOString();
             const listId = activeDraft?.id ?? createId();
+            const totalEstimatedCost = roundCurrency(
+              items.reduce((sum, item) => sum + (item.estimatedPrice ?? 0), 0)
+            );
 
             if (activeDraft) {
               const [updatedDraft] = await transaction
                 .update(databaseTables.shoppingLists)
                 .set({
                   updatedAt: timestamp,
-                  totalEstimatedCost: 0,
+                  totalEstimatedCost,
                   status: "draft"
                 })
                 .where(
@@ -290,7 +303,7 @@ export function createShoppingListRepository(
                 planId: planInstanceId,
                 createdAt: timestamp,
                 updatedAt: timestamp,
-                totalEstimatedCost: 0,
+                totalEstimatedCost,
                 status: "draft"
               });
             }
@@ -302,11 +315,13 @@ export function createShoppingListRepository(
                 ingredientName: item.ingredientName,
                 requiredQuantity: item.requiredQuantity,
                 requiredUnit: item.requiredUnit,
-                freshfulProductId: null,
-                chosenQuantity: null,
-                chosenUnit: null,
-                estimatedPrice: null,
-                category: null,
+                freshfulProductId: item.freshfulProductId,
+                chosenQuantity: item.chosenQuantity,
+                chosenUnit: item.chosenUnit,
+                estimatedPrice: item.estimatedPrice,
+                category: item.category,
+                resolutionSource: item.resolutionSource,
+                resolutionReason: item.resolutionReason,
                 status: "pending" as const,
                 createdAt: timestamp,
                 updatedAt: timestamp

@@ -2,7 +2,8 @@ export const claudeTaskValues = [
   "onboarding-turn",
   "profile-structuring",
   "meal-plan-generation",
-  "meal-plan-refinement"
+  "meal-plan-refinement",
+  "shopping-product-selection"
 ] as const;
 
 export type ClaudeTask = (typeof claudeTaskValues)[number];
@@ -42,6 +43,20 @@ export function selectClaudeModel(config: ClaudeRoutingConfig, input: ClaudeRout
     return {
       tier: "sonnet",
       reason: "Structured profile extraction defaults to Sonnet for higher JSON reliability."
+    };
+  }
+
+  if (input.task === "shopping-product-selection") {
+    if (input.promptChars >= config.sonnetPromptCharThreshold) {
+      return {
+        tier: "sonnet",
+        reason: "Larger shopping tie-breaker prompts escalate to Sonnet for higher reasoning capacity."
+      };
+    }
+
+    return {
+      tier: "haiku",
+      reason: "Shopping product tie-breakers stay on Haiku unless prompt size requires escalation."
     };
   }
 

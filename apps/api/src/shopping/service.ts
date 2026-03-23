@@ -1,8 +1,12 @@
 import { shoppingListSchema, type ShoppingList } from "@freshful/contracts";
 
+import type { ClaudeService } from "../ai/service.js";
+import type { FreshfulCatalogAdapter } from "../freshful/contracts.js";
 import type { PlannerService } from "../planner/service.js";
+import type { ProfileService } from "../profile/service.js";
 import { aggregateIngredientsFromPlan } from "./aggregation.js";
 import { createShoppingListNotFoundError, createShoppingListPlanInstanceRequiredError } from "./errors.js";
+import { resolveShoppingListItems } from "./matching.js";
 import type { ShoppingListRepository } from "./repository.js";
 
 export interface ShoppingListService {
@@ -13,6 +17,9 @@ export interface ShoppingListService {
 export interface CreateShoppingListServiceOptions {
   repository: ShoppingListRepository;
   plannerService: PlannerService;
+  profileService: ProfileService;
+  freshfulCatalog: FreshfulCatalogAdapter;
+  aiService: ClaudeService | null;
 }
 
 export function createShoppingListService(options: CreateShoppingListServiceOptions): ShoppingListService {
@@ -24,7 +31,13 @@ export function createShoppingListService(options: CreateShoppingListServiceOpti
         throw createShoppingListPlanInstanceRequiredError();
       }
 
-      const items = aggregateIngredientsFromPlan(plan);
+      const profile = await options.profileService.getProfile(userId);
+      const items = await resolveShoppingListItems({
+        items: aggregateIngredientsFromPlan(plan),
+        profile,
+        freshfulCatalog: options.freshfulCatalog,
+        aiService: options.aiService
+      });
 
       return shoppingListSchema.parse(await options.repository.upsertDraftForPlan(userId, plan.instance.id, items));
     },

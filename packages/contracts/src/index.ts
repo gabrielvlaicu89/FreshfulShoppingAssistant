@@ -39,6 +39,7 @@ export type MealSlot = (typeof mealSlotValues)[number];
 export const freshfulAvailabilityValues = ["in_stock", "low_stock", "out_of_stock", "unknown"] as const;
 export const shoppingListStatusValues = ["draft", "final"] as const;
 export const shoppingListItemStatusValues = ["pending", "bought", "replaced"] as const;
+export const shoppingListItemResolutionSourceValues = ["deterministic", "ai", "unresolved"] as const;
 
 export const workspaceDescriptorSchema = z
   .object({
@@ -324,6 +325,8 @@ export const freshfulProductSchema = z
 
 export type FreshfulProduct = z.infer<typeof freshfulProductSchema>;
 
+export type ShoppingListItemResolutionSource = (typeof shoppingListItemResolutionSourceValues)[number];
+
 export const shoppingListItemSchema = z
   .object({
     id: identifierSchema,
@@ -336,6 +339,8 @@ export const shoppingListItemSchema = z
     chosenUnit: trimmedStringSchema.nullable(),
     estimatedPrice: nonNegativeNumberSchema.nullable(),
     category: trimmedStringSchema.nullable(),
+    resolutionSource: z.enum(shoppingListItemResolutionSourceValues),
+    resolutionReason: trimmedStringSchema,
     status: z.enum(shoppingListItemStatusValues),
     matchedProduct: freshfulProductSchema.nullable().optional()
   })

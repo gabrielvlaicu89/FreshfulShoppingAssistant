@@ -4,6 +4,7 @@ import type {
   HouseholdProfile,
   MealPlanInstance,
   MealPlanTemplate,
+  ShoppingListItemResolutionSource,
   OnboardingTranscript
 } from "@freshful/contracts";
 import {
@@ -242,6 +243,8 @@ export const shoppingListItems = pgTable(
     chosenUnit: text("chosen_unit"),
     estimatedPrice: numeric("estimated_price", { precision: 10, scale: 2, mode: "number" }),
     category: text("category"),
+    resolutionSource: text("resolution_source").$type<ShoppingListItemResolutionSource>().notNull(),
+    resolutionReason: text("resolution_reason").notNull(),
     status: shoppingListItemStatusEnum("status").notNull(),
     ...timestampColumns
   },

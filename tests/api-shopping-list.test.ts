@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { HouseholdProfile } from "@freshful/contracts";
+import { asc } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 
 import {
@@ -9,8 +11,12 @@ import {
   createAppSessionIssuer,
   createAppSessionVerifier,
   createAuthUserRepository,
+  createFreshfulCatalogRepository,
+  createHouseholdProfileRepository,
   createPlannerRepository,
   createShoppingListRepository,
+  type ClaudeService,
+  type FreshfulCatalogAdapter,
   type ApiConfig,
   type AuthDatabase,
   type AuthenticatedUser,
@@ -118,6 +124,16 @@ function createBarrier(targetCount: number) {
       await barrierReleased;
     }
   };
+}
+
+function createTestProfileRepository(
+  database: Awaited<ReturnType<typeof createMigratedTestDatabase>>["db"],
+  now: Date
+) {
+  return createHouseholdProfileRepository(database, {
+    now: () => now,
+    createId: () => `profile-generated-${now.getTime()}`
+  });
 }
 
 function createPlanDetail(userId: string, withInstance: boolean): PlanDetailResponse {
@@ -308,6 +324,273 @@ async function seedPlan(database: Awaited<ReturnType<typeof createMigratedTestDa
   });
 }
 
+async function seedProfile(
+  database: Awaited<ReturnType<typeof createMigratedTestDatabase>>["db"],
+  userId: string,
+  profile: Omit<HouseholdProfile, "userId" | "rawChatHistoryId">
+) {
+  await database.insert(databaseTables.onboardingTranscripts).values({
+    id: `transcript-${userId}`,
+    userId,
+    messages: [
+      {
+        id: `message-${userId}`,
+        role: "user",
+        content: "We want simple shopping support.",
+        createdAt: "2026-03-23T09:55:00.000Z"
+      }
+    ],
+    householdProfileId: null,
+    containsSensitiveProfileSignals: true,
+    createdAt: "2026-03-23T09:55:00.000Z",
+    updatedAt: "2026-03-23T09:55:00.000Z"
+  });
+
+  await database.insert(databaseTables.householdProfiles).values({
+    id: `profile-${userId}`,
+    userId,
+    householdType: profile.householdType,
+    numChildren: profile.numChildren,
+    dietaryRestrictions: profile.dietaryRestrictions,
+    allergies: profile.allergies,
+    medicalFlags: profile.medicalFlags,
+    goals: profile.goals,
+    cuisinePreferences: profile.cuisinePreferences,
+    favoriteIngredients: profile.favoriteIngredients,
+    dislikedIngredients: profile.dislikedIngredients,
+    budgetBand: profile.budgetBand,
+    maxPrepTimeMinutes: profile.maxPrepTimeMinutes,
+    cookingSkill: profile.cookingSkill,
+    rawChatHistoryId: `transcript-${userId}`,
+    containsSensitiveHealthData: true,
+    createdAt: "2026-03-23T09:56:00.000Z",
+    updatedAt: "2026-03-23T09:56:00.000Z"
+  });
+}
+
+function createProductSelectionPlan(userId: string): PlanDetailResponse {
+  return {
+    template: {
+      id: "plan-template-products-1",
+      userId,
+      title: "Product Selection Plan",
+      durationDays: 1,
+      recipes: [
+        {
+          id: "recipe-products-1",
+          title: "Tomato Soup",
+          ingredients: [
+            {
+              name: "Milk",
+              quantity: 1,
+              unit: "l"
+            },
+            {
+              name: "Tomatoes",
+              quantity: 1000,
+              unit: "g"
+            },
+            {
+              name: "Fresh Basil",
+              quantity: 1,
+              unit: "piece"
+            }
+          ],
+          instructions: ["Cook everything together."],
+          tags: ["quick"],
+          estimatedMacros: {
+            calories: 420,
+            proteinGrams: 14,
+            carbsGrams: 48,
+            fatGrams: 18
+          }
+        }
+      ],
+      days: [
+        {
+          dayNumber: 1,
+          meals: [
+            {
+              slot: "dinner",
+              recipeId: "recipe-products-1"
+            }
+          ]
+        }
+      ],
+      metadata: {
+        tags: ["selection"],
+        estimatedMacros: {
+          calories: 420,
+          proteinGrams: 14,
+          carbsGrams: 48,
+          fatGrams: 18
+        }
+      }
+    },
+    instance: {
+      id: "plan-instance-products-1",
+      templateId: "plan-template-products-1",
+      startDate: "2026-03-24",
+      endDate: "2026-03-24",
+      overrides: []
+    },
+    revisionHistory: [
+      {
+        templateId: "plan-template-products-1",
+        parentTemplateId: null,
+        title: "Product Selection Plan",
+        createdAt: "2026-03-23T10:00:00.000Z",
+        instanceId: "plan-instance-products-1",
+        startDate: "2026-03-24",
+        endDate: "2026-03-24"
+      }
+    ]
+  };
+}
+
+function createSingleIngredientSelectionPlan(args: {
+  userId: string;
+  planId: string;
+  planTitle: string;
+  recipeId: string;
+  instanceId: string;
+  ingredientName: string;
+  quantity: number;
+  unit: string;
+}): PlanDetailResponse {
+  return {
+    template: {
+      id: args.planId,
+      userId: args.userId,
+      title: args.planTitle,
+      durationDays: 1,
+      recipes: [
+        {
+          id: args.recipeId,
+          title: `${args.ingredientName} Test Recipe`,
+          ingredients: [
+            {
+              name: args.ingredientName,
+              quantity: args.quantity,
+              unit: args.unit
+            }
+          ],
+          instructions: ["Prepare the ingredient."],
+          tags: ["test"],
+          estimatedMacros: {
+            calories: 100,
+            proteinGrams: 5,
+            carbsGrams: 5,
+            fatGrams: 5
+          }
+        }
+      ],
+      days: [
+        {
+          dayNumber: 1,
+          meals: [
+            {
+              slot: "dinner",
+              recipeId: args.recipeId
+            }
+          ]
+        }
+      ],
+      metadata: {
+        tags: ["shopping-test"],
+        estimatedMacros: {
+          calories: 100,
+          proteinGrams: 5,
+          carbsGrams: 5,
+          fatGrams: 5
+        }
+      }
+    },
+    instance: {
+      id: args.instanceId,
+      templateId: args.planId,
+      startDate: "2026-03-24",
+      endDate: "2026-03-24",
+      overrides: []
+    },
+    revisionHistory: [
+      {
+        templateId: args.planId,
+        parentTemplateId: null,
+        title: args.planTitle,
+        createdAt: "2026-03-23T10:00:00.000Z",
+        instanceId: args.instanceId,
+        startDate: "2026-03-24",
+        endDate: "2026-03-24"
+      }
+    ]
+  };
+}
+
+function createSearchCandidate(args: {
+  id: string;
+  freshfulId: string;
+  name: string;
+  price: number;
+  unit: string;
+  category: string;
+  tags?: string[];
+  availability?: "in_stock" | "low_stock" | "out_of_stock" | "unknown";
+  rank?: number;
+}) {
+  const slug = `${args.freshfulId}-${args.name.toLowerCase().replace(/[^a-z0-9]+/gu, "-")}`;
+
+  return {
+    id: args.id,
+    freshfulId: args.freshfulId,
+    name: args.name,
+    price: args.price,
+    currency: "RON" as const,
+    unit: args.unit,
+    category: args.category,
+    tags: args.tags ?? [],
+    imageUrl: `https://www.freshful.ro/products/${args.freshfulId}.png`,
+    lastSeenAt: "2026-03-23T10:00:00.000Z",
+    availability: args.availability ?? "in_stock",
+    searchMetadata: {
+      query: "test",
+      rank: args.rank ?? 0
+    },
+    productReference: {
+      freshfulId: args.freshfulId,
+      slug,
+      detailPath: `/p/${slug}`,
+      detailUrl: `https://www.freshful.ro/p/${slug}`
+    }
+  };
+}
+
+function summarizeResolvedItem(item: {
+  ingredientName: string;
+  freshfulProductId: string | null;
+  chosenQuantity: number | null;
+  chosenUnit: string | null;
+  estimatedPrice: number | null;
+  category: string | null;
+  resolutionSource: string;
+  resolutionReason: string;
+  matchedProduct?: {
+    name: string;
+  } | null;
+}) {
+  return {
+    ingredientName: item.ingredientName,
+    freshfulProductId: item.freshfulProductId,
+    chosenQuantity: item.chosenQuantity,
+    chosenUnit: item.chosenUnit,
+    estimatedPrice: item.estimatedPrice,
+    category: item.category,
+    resolutionSource: item.resolutionSource,
+    resolutionReason: item.resolutionReason,
+    matchedProductName: item.matchedProduct?.name ?? null
+  };
+}
+
 test("aggregateIngredientsFromPlan merges repeated ingredients, normalizes units, and applies plan overrides", () => {
   const plan = createPlanDetail("aggregate-user", true);
 
@@ -356,6 +639,9 @@ test("POST /plans/:id/shopping-list creates or refreshes a persisted draft and G
       userRepository: createAuthUserRepository(database.db as AuthDatabase, {
         now: () => fixedNow
       })
+    },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
     },
     planner: {
       repository: createPlannerRepository(database.db, {
@@ -514,6 +800,9 @@ test("POST /plans/:id/shopping-list converges overlapping first-draft requests i
         now: () => fixedNow
       })
     },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
+    },
     planner: {
       repository: createPlannerRepository(database.db, {
         now: () => fixedNow
@@ -600,6 +889,9 @@ test("POST /plans/:id/shopping-list serializes overlapping refreshes for an exis
       userRepository: createAuthUserRepository(database.db as AuthDatabase, {
         now: () => fixedNow
       })
+    },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
     },
     planner: {
       repository: createPlannerRepository(database.db, {
@@ -729,6 +1021,9 @@ test("POST /plans/:id/shopping-list rejects plan templates that do not have a da
         now: () => fixedNow
       })
     },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
+    },
     planner: {
       repository: createPlannerRepository(database.db, {
         now: () => fixedNow
@@ -763,4 +1058,785 @@ test("POST /plans/:id/shopping-list rejects plan templates that do not have a da
     .where(eq(databaseTables.shoppingLists.userId, user.id));
 
   assert.equal(storedLists.length, 0);
+});
+
+test("POST /plans/:id/shopping-list persists and returns resolution metadata for deterministic, AI, and unresolved items", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-23T12:00:00.000Z");
+  const user = createUser("shopping-list-resolution-user", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  const plan = createProductSelectionPlan(user.id);
+  await seedPlan(database.db, plan);
+  await seedProfile(database.db, user.id, {
+    householdType: "family",
+    numChildren: 1,
+    dietaryRestrictions: ["vegetarian"],
+    allergies: {
+      normalized: [],
+      freeText: []
+    },
+    medicalFlags: {
+      diabetes: false,
+      hypertension: false
+    },
+    goals: ["maintenance"],
+    cuisinePreferences: ["Mediterranean"],
+    favoriteIngredients: ["tomatoes"],
+    dislikedIngredients: ["celery"],
+    budgetBand: "medium",
+    maxPrepTimeMinutes: 30,
+    cookingSkill: "intermediate"
+  });
+
+  const searchCalls: string[] = [];
+  const aiCalls: string[] = [];
+  const freshfulRepository = createFreshfulCatalogRepository(database.db);
+  const freshfulService: FreshfulCatalogAdapter = {
+    async searchProducts(input) {
+      searchCalls.push(input.query);
+
+      if (input.query === "milk") {
+        const product = createSearchCandidate({
+          id: "product-milk-1",
+          freshfulId: "freshful-milk-1",
+          name: "Milk 1L",
+          price: 10.5,
+          unit: "1l",
+          category: "Dairy",
+          rank: 0
+        });
+
+        await freshfulRepository.saveSearchResult({
+          cacheKey: `search::${input.query}`,
+          input,
+          products: [product],
+          fetchedAt: fixedNow.toISOString(),
+          expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+          responseHash: `hash::${input.query}`
+        });
+
+        return {
+          products: [product],
+          cache: {
+            source: "network",
+            isStale: false,
+            fetchedAt: fixedNow.toISOString(),
+            expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+            recency: {
+              policy: "search",
+              status: "fresh",
+              ageMs: 0,
+              maxAgeMs: 60_000
+            }
+          }
+        };
+      }
+
+      if (input.query === "tomatoes" || input.query === "tomato") {
+        const products = [
+          createSearchCandidate({
+            id: "product-tomato-1",
+            freshfulId: "freshful-tomato-1",
+            name: "Cherry Tomatoes 500 g",
+            price: 8.99,
+            unit: "500 g",
+            category: "Vegetables",
+            rank: 0
+          }),
+          createSearchCandidate({
+            id: "product-tomato-2",
+            freshfulId: "freshful-tomato-2",
+            name: "Diced Tomatoes 500 g",
+            price: 7.49,
+            unit: "500 g",
+            category: "Pantry",
+            rank: 1
+          })
+        ];
+
+        await freshfulRepository.saveSearchResult({
+          cacheKey: `search::${input.query}`,
+          input,
+          products,
+          fetchedAt: fixedNow.toISOString(),
+          expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+          responseHash: `hash::${input.query}`
+        });
+
+        return {
+          products,
+          cache: {
+            source: "network",
+            isStale: false,
+            fetchedAt: fixedNow.toISOString(),
+            expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+            recency: {
+              policy: "search",
+              status: "fresh",
+              ageMs: 0,
+              maxAgeMs: 60_000
+            }
+          }
+        };
+      }
+
+      if (input.query === "fresh basil") {
+        const products = [
+          createSearchCandidate({
+            id: "product-basil-1",
+            freshfulId: "freshful-basil-1",
+              name: "Living Herb Pot 1 pc",
+            price: 6.2,
+              unit: "1 pc",
+              category: "Home Gardening",
+              availability: "unknown",
+              rank: 4
+          }),
+          createSearchCandidate({
+            id: "product-basil-2",
+            freshfulId: "freshful-basil-2",
+              name: "Pesto Verde 190 g",
+            price: 9.4,
+            unit: "190 g",
+            category: "Sauces",
+              availability: "out_of_stock",
+              rank: 5
+          })
+        ];
+
+        await freshfulRepository.saveSearchResult({
+          cacheKey: `search::${input.query}`,
+          input,
+          products,
+          fetchedAt: fixedNow.toISOString(),
+          expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+          responseHash: `hash::${input.query}`
+        });
+
+        return {
+          products,
+          cache: {
+            source: "network",
+            isStale: false,
+            fetchedAt: fixedNow.toISOString(),
+            expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+            recency: {
+              policy: "search",
+              status: "fresh",
+              ageMs: 0,
+              maxAgeMs: 60_000
+            }
+          }
+        };
+      }
+
+      return {
+        products: [],
+        cache: {
+          source: "network",
+          isStale: false,
+          fetchedAt: fixedNow.toISOString(),
+          expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+          recency: {
+            policy: "search",
+            status: "fresh",
+            ageMs: 0,
+            maxAgeMs: 60_000
+          }
+        }
+      };
+    },
+    async getProductDetails(reference) {
+      const persisted = await freshfulRepository.getProductByReference(reference);
+
+      assert.ok(persisted);
+
+      return {
+        product: persisted.product,
+        productReference: persisted.productReference,
+        cache: {
+          source: "cache",
+          isStale: false,
+          fetchedAt: fixedNow.toISOString(),
+          expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+          recency: {
+            policy: "detail",
+            status: "fresh",
+            ageMs: 0,
+            maxAgeMs: 60_000
+          }
+        }
+      };
+    }
+  };
+  const aiService: ClaudeService = {
+    async createOnboardingReply() {
+      throw new Error("Unexpected onboarding reply call.");
+    },
+    async extractProfile() {
+      throw new Error("Unexpected profile extraction call.");
+    },
+    async createMealPlan() {
+      throw new Error("Unexpected meal-plan generation call.");
+    },
+    async refineMealPlan() {
+      throw new Error("Unexpected meal-plan refinement call.");
+    },
+    async selectShoppingProduct(request) {
+      aiCalls.push(request.ingredientName);
+
+      if (request.ingredientName === "tomatoes") {
+        return {
+          selectedProductId: "product-tomato-2",
+          reason: "Canned diced tomatoes fit the recipe and required quantity better.",
+          rawText: JSON.stringify({
+            selectedProductId: "product-tomato-2",
+            reason: "Canned diced tomatoes fit the recipe and required quantity better."
+          }),
+          parseFailureReason: null,
+          usage: {
+            model: "claude-3-5-haiku-latest",
+            modelTier: "haiku",
+            routeReason: "Shopping product tie-breakers stay on Haiku unless prompt size requires escalation.",
+            inputTokens: 40,
+            outputTokens: 15
+          }
+        };
+      }
+
+      return {
+        selectedProductId: null,
+        reason: "None of the candidates look like fresh basil leaves.",
+        rawText: JSON.stringify({
+          selectedProductId: null,
+          reason: "None of the candidates look like fresh basil leaves."
+        }),
+        parseFailureReason: null,
+        usage: {
+          model: "claude-3-5-haiku-latest",
+          modelTier: "haiku",
+          routeReason: "Shopping product tie-breakers stay on Haiku unless prompt size requires escalation.",
+          inputTokens: 38,
+          outputTokens: 13
+        }
+      };
+    }
+  };
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: aiService
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    freshful: {
+      repository: freshfulRepository,
+      service: freshfulService
+    },
+    shopping: {
+      repository: createShoppingListRepository(database.db, {
+        now: () => fixedNow,
+        createId: (() => {
+          let sequence = 0;
+
+          return () => `shopping-resolution-id-${++sequence}`;
+        })()
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: `/plans/${plan.template.id}/shopping-list`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    }
+  });
+
+  assert.equal(createResponse.statusCode, 200, createResponse.body);
+  assert.deepEqual(searchCalls, ["fresh basil", "milk", "tomatoes"]);
+  assert.deepEqual(aiCalls, ["tomatoes"]);
+  assert.equal(createResponse.json().totalEstimatedCost, 25.48);
+  assert.deepEqual(
+    createResponse
+      .json()
+      .items.map((item: Parameters<typeof summarizeResolvedItem>[0]) => summarizeResolvedItem(item)),
+    [
+      {
+        ingredientName: "fresh basil",
+        freshfulProductId: null,
+        chosenQuantity: null,
+        chosenUnit: null,
+        estimatedPrice: null,
+        category: null,
+        resolutionSource: "unresolved",
+        resolutionReason: "Only \"Living Herb Pot 1 pc\" remained, but the deterministic score was too weak for an automatic match.",
+        matchedProductName: null
+      },
+      {
+        ingredientName: "milk",
+        freshfulProductId: "product-milk-1",
+        chosenQuantity: 1,
+        chosenUnit: "1l",
+        estimatedPrice: 10.5,
+        category: "Dairy",
+        resolutionSource: "deterministic",
+        resolutionReason: "Deterministic rules selected \"Milk 1L\" as the only viable Freshful candidate.",
+        matchedProductName: "Milk 1L"
+      },
+      {
+        ingredientName: "tomatoes",
+        freshfulProductId: "product-tomato-2",
+        chosenQuantity: 2,
+        chosenUnit: "500 g",
+        estimatedPrice: 14.98,
+        category: "Pantry",
+        resolutionSource: "ai",
+        resolutionReason: "Canned diced tomatoes fit the recipe and required quantity better.",
+        matchedProductName: "Diced Tomatoes 500 g"
+      }
+    ]
+  );
+
+  const getResponse = await app.inject({
+    method: "GET",
+    url: "/shopping-lists/shopping-resolution-id-1",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    }
+  });
+
+  assert.equal(getResponse.statusCode, 200, getResponse.body);
+  assert.equal(getResponse.json().totalEstimatedCost, 25.48);
+  assert.deepEqual(
+    getResponse
+      .json()
+      .items.map((item: Parameters<typeof summarizeResolvedItem>[0]) => summarizeResolvedItem(item)),
+    [
+      {
+        ingredientName: "fresh basil",
+        freshfulProductId: null,
+        chosenQuantity: null,
+        chosenUnit: null,
+        estimatedPrice: null,
+        category: null,
+        resolutionSource: "unresolved",
+        resolutionReason: "Only \"Living Herb Pot 1 pc\" remained, but the deterministic score was too weak for an automatic match.",
+        matchedProductName: null
+      },
+      {
+        ingredientName: "milk",
+        freshfulProductId: "product-milk-1",
+        chosenQuantity: 1,
+        chosenUnit: "1l",
+        estimatedPrice: 10.5,
+        category: "Dairy",
+        resolutionSource: "deterministic",
+        resolutionReason: "Deterministic rules selected \"Milk 1L\" as the only viable Freshful candidate.",
+        matchedProductName: "Milk 1L"
+      },
+      {
+        ingredientName: "tomatoes",
+        freshfulProductId: "product-tomato-2",
+        chosenQuantity: 2,
+        chosenUnit: "500 g",
+        estimatedPrice: 14.98,
+        category: "Pantry",
+        resolutionSource: "ai",
+        resolutionReason: "Canned diced tomatoes fit the recipe and required quantity better.",
+        matchedProductName: "Diced Tomatoes 500 g"
+      }
+    ]
+  );
+
+  const storedItems = await database.db
+    .select({
+      ingredientName: databaseTables.shoppingListItems.ingredientName,
+      resolutionSource: databaseTables.shoppingListItems.resolutionSource,
+      resolutionReason: databaseTables.shoppingListItems.resolutionReason,
+      freshfulProductId: databaseTables.shoppingListItems.freshfulProductId
+    })
+    .from(databaseTables.shoppingListItems)
+    .where(eq(databaseTables.shoppingListItems.listId, "shopping-resolution-id-1"))
+    .orderBy(asc(databaseTables.shoppingListItems.ingredientName));
+
+  assert.deepEqual(storedItems, [
+    {
+      ingredientName: "fresh basil",
+      resolutionSource: "unresolved",
+      resolutionReason: "Only \"Living Herb Pot 1 pc\" remained, but the deterministic score was too weak for an automatic match.",
+      freshfulProductId: null
+    },
+    {
+      ingredientName: "milk",
+      resolutionSource: "deterministic",
+      resolutionReason: "Deterministic rules selected \"Milk 1L\" as the only viable Freshful candidate.",
+      freshfulProductId: "product-milk-1"
+    },
+    {
+      ingredientName: "tomatoes",
+      resolutionSource: "ai",
+      resolutionReason: "Canned diced tomatoes fit the recipe and required quantity better.",
+      freshfulProductId: "product-tomato-2"
+    }
+  ]);
+
+  const [storedList] = await database.db
+    .select()
+    .from(databaseTables.shoppingLists)
+    .where(eq(databaseTables.shoppingLists.id, "shopping-resolution-id-1"));
+
+  assert.equal(storedList?.totalEstimatedCost, 25.48);
+});
+
+test("POST /plans/:id/shopping-list returns unresolved when the only candidate violates hard dietary or allergy constraints", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-23T12:30:00.000Z");
+  const user = createUser("shopping-list-unsafe-single-user", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  const plan = createSingleIngredientSelectionPlan({
+    userId: user.id,
+    planId: "plan-template-unsafe-single-1",
+    planTitle: "Unsafe Single Candidate Plan",
+    recipeId: "recipe-unsafe-single-1",
+    instanceId: "plan-instance-unsafe-single-1",
+    ingredientName: "Milk",
+    quantity: 1,
+    unit: "l"
+  });
+  await seedPlan(database.db, plan);
+  await seedProfile(database.db, user.id, {
+    householdType: "single",
+    numChildren: 0,
+    dietaryRestrictions: [],
+    allergies: {
+      normalized: ["dairy"],
+      freeText: []
+    },
+    medicalFlags: {
+      diabetes: false,
+      hypertension: false
+    },
+    goals: ["maintenance"],
+    cuisinePreferences: ["Mediterranean"],
+    favoriteIngredients: [],
+    dislikedIngredients: [],
+    budgetBand: "medium",
+    maxPrepTimeMinutes: 30,
+    cookingSkill: "intermediate"
+  });
+
+  const aiCalls: string[] = [];
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: {
+          async createOnboardingReply() {
+            throw new Error("Unexpected onboarding reply call.");
+          },
+          async extractProfile() {
+            throw new Error("Unexpected profile extraction call.");
+          },
+          async createMealPlan() {
+            throw new Error("Unexpected meal-plan generation call.");
+          },
+          async refineMealPlan() {
+            throw new Error("Unexpected meal-plan refinement call.");
+          },
+          async selectShoppingProduct(request) {
+            aiCalls.push(request.ingredientName);
+            throw new Error("AI tie-break should not run for filtered candidates.");
+          }
+        } satisfies ClaudeService
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    freshful: {
+      repository: createFreshfulCatalogRepository(database.db),
+      service: {
+        async searchProducts(input) {
+          assert.equal(input.query, "milk");
+
+          return {
+            products: [
+              createSearchCandidate({
+                id: "product-milk-unsafe-1",
+                freshfulId: "freshful-milk-unsafe-1",
+                name: "Milk 1L",
+                price: 10.5,
+                unit: "1l",
+                category: "Dairy",
+                rank: 0
+              })
+            ],
+            cache: {
+              source: "network",
+              isStale: false,
+              fetchedAt: fixedNow.toISOString(),
+              expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+              recency: {
+                policy: "search",
+                status: "fresh",
+                ageMs: 0,
+                maxAgeMs: 60_000
+              }
+            }
+          };
+        },
+        async getProductDetails() {
+          throw new Error("Unexpected product details call.");
+        }
+      } satisfies FreshfulCatalogAdapter
+    },
+    shopping: {
+      repository: createShoppingListRepository(database.db, {
+        now: () => fixedNow,
+        createId: () => "shopping-unsafe-single-id-1"
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/plans/${plan.template.id}/shopping-list`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().totalEstimatedCost, 0);
+  assert.deepEqual(aiCalls, []);
+  assert.deepEqual(
+    response
+      .json()
+      .items.map((item: Parameters<typeof summarizeResolvedItem>[0]) => summarizeResolvedItem(item)),
+    [
+      {
+        ingredientName: "milk",
+        freshfulProductId: null,
+        chosenQuantity: null,
+        chosenUnit: null,
+        estimatedPrice: null,
+        category: null,
+        resolutionSource: "unresolved",
+        resolutionReason: "No safe Freshful candidates remained after applying hard dietary and allergy constraints for this household.",
+        matchedProductName: null
+      }
+    ]
+  );
+});
+
+test("POST /plans/:id/shopping-list never invokes AI when every ambiguous candidate is filtered by hard constraints", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-23T12:45:00.000Z");
+  const user = createUser("shopping-list-all-unsafe-user", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  const plan = createSingleIngredientSelectionPlan({
+    userId: user.id,
+    planId: "plan-template-all-unsafe-1",
+    planTitle: "All Unsafe Candidate Plan",
+    recipeId: "recipe-all-unsafe-1",
+    instanceId: "plan-instance-all-unsafe-1",
+    ingredientName: "Yogurt",
+    quantity: 2,
+    unit: "pcs"
+  });
+  await seedPlan(database.db, plan);
+  await seedProfile(database.db, user.id, {
+    householdType: "single",
+    numChildren: 0,
+    dietaryRestrictions: [],
+    allergies: {
+      normalized: ["dairy"],
+      freeText: []
+    },
+    medicalFlags: {
+      diabetes: false,
+      hypertension: false
+    },
+    goals: ["maintenance"],
+    cuisinePreferences: ["Mediterranean"],
+    favoriteIngredients: [],
+    dislikedIngredients: [],
+    budgetBand: "medium",
+    maxPrepTimeMinutes: 30,
+    cookingSkill: "intermediate"
+  });
+
+  const aiCalls: string[] = [];
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: {
+          async createOnboardingReply() {
+            throw new Error("Unexpected onboarding reply call.");
+          },
+          async extractProfile() {
+            throw new Error("Unexpected profile extraction call.");
+          },
+          async createMealPlan() {
+            throw new Error("Unexpected meal-plan generation call.");
+          },
+          async refineMealPlan() {
+            throw new Error("Unexpected meal-plan refinement call.");
+          },
+          async selectShoppingProduct(request) {
+            aiCalls.push(request.ingredientName);
+            throw new Error("AI tie-break should not run when all candidates are filtered out.");
+          }
+        } satisfies ClaudeService
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    freshful: {
+      repository: createFreshfulCatalogRepository(database.db),
+      service: {
+        async searchProducts(input) {
+          assert.equal(input.query, "yogurt");
+
+          return {
+            products: [
+              createSearchCandidate({
+                id: "product-yogurt-unsafe-1",
+                freshfulId: "freshful-yogurt-unsafe-1",
+                name: "Greek Yogurt 400 g",
+                price: 9.9,
+                unit: "400 g",
+                category: "Dairy",
+                rank: 0
+              }),
+              createSearchCandidate({
+                id: "product-yogurt-unsafe-2",
+                freshfulId: "freshful-yogurt-unsafe-2",
+                name: "Drinkable Yogurt 330 ml",
+                price: 7.4,
+                unit: "330 ml",
+                category: "Dairy Drinks",
+                rank: 1
+              })
+            ],
+            cache: {
+              source: "network",
+              isStale: false,
+              fetchedAt: fixedNow.toISOString(),
+              expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+              recency: {
+                policy: "search",
+                status: "fresh",
+                ageMs: 0,
+                maxAgeMs: 60_000
+              }
+            }
+          };
+        },
+        async getProductDetails() {
+          throw new Error("Unexpected product details call.");
+        }
+      } satisfies FreshfulCatalogAdapter
+    },
+    shopping: {
+      repository: createShoppingListRepository(database.db, {
+        now: () => fixedNow,
+        createId: () => "shopping-all-unsafe-id-1"
+      })
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/plans/${plan.template.id}/shopping-list`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().totalEstimatedCost, 0);
+  assert.deepEqual(aiCalls, []);
+  assert.deepEqual(
+    response
+      .json()
+      .items.map((item: Parameters<typeof summarizeResolvedItem>[0]) => summarizeResolvedItem(item)),
+    [
+      {
+        ingredientName: "yogurt",
+        freshfulProductId: null,
+        chosenQuantity: null,
+        chosenUnit: null,
+        estimatedPrice: null,
+        category: null,
+        resolutionSource: "unresolved",
+        resolutionReason: "No safe Freshful candidates remained after applying hard dietary and allergy constraints for this household.",
+        matchedProductName: null
+      }
+    ]
+  );
 });

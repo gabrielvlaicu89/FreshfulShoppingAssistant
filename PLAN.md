@@ -195,7 +195,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add unit tests for ingredient merging and integration tests for shopping-list draft creation; run root typecheck and test commands.
 	Review: Required; reviewer verifies quantity aggregation is deterministic and handles repeated ingredients safely.
 
-- [ ] P8-S2: Implement AI-assisted Freshful product selection and priced shopping lists
+- [x] P8-S2: Implement AI-assisted Freshful product selection and priced shopping lists
 	Owner: Coder
 	Depends on: P8-S1, P7-S2, P5-S1
 	Acceptance: The backend can search Freshful for ingredient candidates, choose recommended SKUs using deterministic rules plus Claude assistance where needed, and return a shopping list with price estimates, product metadata, and unresolved-item handling.
@@ -253,6 +253,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
 
 
 

@@ -1,13 +1,18 @@
 {
   "planningStatus": "in-progress",
-  "currentStepId": "P8-S2",
-  "lastCompletedItemId": "P8-S1",
-  "lastReviewedItemId": "P8-S1",
+  "currentStepId": "P8-S3",
+  "lastCompletedItemId": "P8-S2",
+  "lastReviewedItemId": "P8-S2",
   "lastReviewOutcome": "approved",
   "lastCommitMessage": null,
   "lastPushAttempt": null,
   "phaseCommits": [],
   "recentNotes": [
+    {
+      "timestamp": "2026-03-23T15:05:15.808Z",
+      "stepId": "P8-S2",
+      "note": "P8-S2 accepted after shopping-resolution validation and review; apps/api now resolves shopping-list draft items to Freshful products using safe candidate filtering, deterministic ranking, Claude tie-breaks only for remaining ambiguous cases, explicit per-item provenance, persisted price estimates, and unresolved-item handling."
+    },
     {
       "timestamp": "2026-03-23T14:08:10.099Z",
       "stepId": "P8-S1",
@@ -52,17 +57,12 @@
       "timestamp": "2026-03-22T20:09:58.753Z",
       "stepId": "P5-S2",
       "note": "P5-S2 accepted after onboarding endpoint validation and review; apps/api now exposes an authenticated onboarding chat route with transcript persistence, structured profile extraction, explicit partial/invalid handling, user-scoped transcript/profile linkage, concurrency-safe draft management, and Drizzle-backed migration metadata for the single-active-draft invariant."
-    },
-    {
-      "timestamp": "2026-03-22T18:56:24.776Z",
-      "stepId": "P5-S1",
-      "note": "P5-S1 accepted after backend AI foundation validation and review; apps/api now provides a reusable Claude client, prompt templates, model routing, parser fallback, optional Anthropic startup wiring, and validated partial-profile extraction for incomplete onboarding transcripts without fabricating sensitive fields."
     }
   ],
   "lastRun": {
-    "timestamp": "2026-03-23T14:08:10.099Z",
+    "timestamp": "2026-03-23T15:05:15.808Z",
     "agent": "orchestrator",
-    "action": "update-progress:P8-S1",
+    "action": "update-progress:P8-S2",
     "status": "done"
   }
 }

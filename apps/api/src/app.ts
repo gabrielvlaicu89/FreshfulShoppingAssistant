@@ -185,7 +185,16 @@ function isProfileService(value: unknown): value is ProfileService {
 }
 
 function isClaudeService(value: unknown): value is ClaudeService {
-  return typeof value === "object" && value !== null && "createOnboardingReply" in value && "extractProfile" in value;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "createOnboardingReply" in value &&
+    "extractProfile" in value
+  );
+}
+
+function supportsShoppingProductSelection(value: ClaudeService | null): value is ClaudeService {
+  return typeof value === "object" && value !== null && "selectShoppingProduct" in value;
 }
 
 function isOnboardingService(value: unknown): value is OnboardingService {
@@ -349,7 +358,10 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
                 maxConnections: config.appEnv === "production" ? 5 : 1
               })).db
           ),
-        plannerService
+        plannerService,
+        profileService,
+        freshfulCatalog: freshfulService,
+        aiService: supportsShoppingProductSelection(aiImplementation) ? aiImplementation : null
       });
   const appContext: ApiAppContext = {
     config,

@@ -230,6 +230,8 @@ test("shoppingListSchema and errorPayloadSchema cover product linkage and servic
         chosenUnit: "l",
         estimatedPrice: 18.5,
         category: "Dairy",
+        resolutionSource: "deterministic",
+        resolutionReason: "Deterministic rules selected \"Freshful Organic Milk 1L\" as the only viable Freshful candidate.",
         status: "pending",
         matchedProduct: {
           id: "product-1",

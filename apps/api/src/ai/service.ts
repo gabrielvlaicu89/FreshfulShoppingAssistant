@@ -16,7 +16,8 @@ import {
   assembleMealPlanPrompt,
   assembleMealPlanRefinementPrompt,
   assembleOnboardingReplyPrompt,
-  assembleProfileExtractionPrompt
+  assembleProfileExtractionPrompt,
+  assembleShoppingProductSelectionPrompt
 } from "./prompts.js";
 import { selectClaudeModel, type ClaudeModelTier, type ClaudeTask } from "./routing.js";
 
@@ -35,6 +36,13 @@ const profileExtractionEnvelopeSchema = z.discriminatedUnion("status", [
     })
     .strict()
 ]);
+
+const shoppingProductSelectionSchema = z
+  .object({
+    selectedProductId: z.string().trim().min(1).nullable(),
+    reason: z.string().trim().min(1)
+  })
+  .strict();
 
 export type ExtractedProfileData = ProfileWriteInput | PartialProfileWriteInput;
 
@@ -111,11 +119,48 @@ export interface MealPlanRefinementResponse {
   usage: ClaudeServiceUsage;
 }
 
+export interface ShoppingProductSelectionRequest {
+  ingredientName: string;
+  requiredQuantity: number;
+  requiredUnit: string;
+  profile: {
+    dietaryRestrictions: string[];
+    allergies: {
+      normalized: string[];
+      freeText: string[];
+    };
+    favoriteIngredients: string[];
+    dislikedIngredients: string[];
+    cuisinePreferences: string[];
+    budgetBand: string;
+  } | null;
+  candidates: Array<{
+    id: string;
+    name: string;
+    price: number;
+    currency: string;
+    unit: string;
+    category: string;
+    tags: string[];
+    availability: string;
+    searchRank: number | null;
+  }>;
+}
+
+export interface ShoppingProductSelectionResponse {
+  selectedProductId: string | null;
+  reason: string;
+  rawText: string;
+  parseFailureReason: "missing_json" | "invalid_json" | "schema_mismatch" | null;
+  usage: ClaudeServiceUsage;
+}
+
 export interface ClaudeService {
   createOnboardingReply(request: OnboardingReplyRequest): Promise<OnboardingReplyResponse>;
   extractProfile(request: ProfileExtractionRequest): Promise<ProfileExtractionResponse>;
   createMealPlan(request: MealPlanGenerationRequest): Promise<MealPlanGenerationResponse>;
   refineMealPlan(request: MealPlanRefinementRequest): Promise<MealPlanRefinementResponse>;
+  selectShoppingProduct(request: ShoppingProductSelectionRequest): Promise<ShoppingProductSelectionResponse>;
 }
 
 export interface CreateClaudeServiceOptions {
@@ -278,6 +323,34 @@ export function createClaudeService(options: CreateClaudeServiceOptions): Claude
         plan: parsed.data,
         rawText: response.text.trim(),
         parseFailureReason: parsed.failureReason,
+        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+      };
+    },
+
+    async selectShoppingProduct(request) {
+      const prompt = assembleShoppingProductSelectionPrompt(request);
+
+      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
+
+      const route = resolveModel(options.config, "shopping-product-selection", 0, prompt.promptChars);
+      const response = await client.createMessage({
+        model: route.model,
+        system: prompt.system,
+        maxTokens: options.config.usage.maxOutputTokens,
+        messages: prompt.messages
+      });
+      const parsed = parseStructuredResponse(response.text, shoppingProductSelectionSchema);
+      const candidateIds = new Set(request.candidates.map((candidate) => candidate.id));
+      const selectedProductId = parsed.data?.selectedProductId ?? null;
+      const isValidSelection = selectedProductId === null || candidateIds.has(selectedProductId);
+
+      return {
+        selectedProductId: isValidSelection ? selectedProductId : null,
+        reason:
+          parsed.data?.reason ??
+          "Claude did not return a valid shopping product selection response.",
+        rawText: response.text.trim(),
+        parseFailureReason: isValidSelection ? parsed.failureReason : "schema_mismatch",
         usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
       };
     }

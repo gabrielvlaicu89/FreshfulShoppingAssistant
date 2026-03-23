@@ -55,6 +55,34 @@ export interface MealPlanRefinementPromptInput {
   refinementPrompt: string;
 }
 
+export interface ShoppingProductSelectionPromptInput {
+  ingredientName: string;
+  requiredQuantity: number;
+  requiredUnit: string;
+  profile: {
+    dietaryRestrictions: string[];
+    allergies: {
+      normalized: string[];
+      freeText: string[];
+    };
+    favoriteIngredients: string[];
+    dislikedIngredients: string[];
+    cuisinePreferences: string[];
+    budgetBand: string;
+  } | null;
+  candidates: Array<{
+    id: string;
+    name: string;
+    price: number;
+    currency: string;
+    unit: string;
+    category: string;
+    tags: string[];
+    availability: string;
+    searchRank: number | null;
+  }>;
+}
+
 const onboardingFieldChecklist = [
   "household type and number of children",
   "dietary restrictions and allergies",
@@ -195,6 +223,43 @@ export function assembleMealPlanRefinementPrompt(input: MealPlanRefinementPrompt
     `Profile context: ${JSON.stringify(input.profile)}`,
     `Current meal plan: ${JSON.stringify(input.currentPlan)}`,
     "Return only the refined JSON object."
+  ].join("\n\n");
+  const messages = [
+    {
+      role: "user" as const,
+      content: userPrompt
+    }
+  ];
+
+  return {
+    system,
+    messages,
+    promptChars: measurePrompt(system, messages),
+    transcriptMessageCount: 0
+  };
+}
+
+export function assembleShoppingProductSelectionPrompt(
+  input: ShoppingProductSelectionPromptInput
+): PromptEnvelope {
+  const system = [
+    "You choose the best Freshful catalog candidate for a shopping-list ingredient.",
+    "Return valid JSON only with no markdown fences or explanatory prose.",
+    '{"selectedProductId":string|null,"reason":string} is the only allowed response shape.',
+    "Only choose from the provided candidate ids.",
+    "Prefer the most direct ingredient match with compatible package size, availability, and user constraints.",
+    "If no candidate is a safe or clear match, return selectedProductId as null and explain why briefly."
+  ].join(" ");
+  const userPrompt = [
+    "Select the best Freshful product candidate for this ingredient.",
+    `Ingredient requirement: ${JSON.stringify({
+      ingredientName: input.ingredientName,
+      requiredQuantity: input.requiredQuantity,
+      requiredUnit: input.requiredUnit
+    })}`,
+    `Household profile context: ${JSON.stringify(input.profile)}`,
+    `Candidates: ${JSON.stringify(input.candidates)}`,
+    "Return only the JSON object."
   ].join("\n\n");
   const messages = [
     {

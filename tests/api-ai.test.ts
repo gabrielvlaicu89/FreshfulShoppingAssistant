@@ -6,6 +6,7 @@ import type { OnboardingChatMessage } from "@freshful/contracts";
 import {
   assembleMealPlanPrompt,
   assembleProfileExtractionPrompt,
+  assembleShoppingProductSelectionPrompt,
   ClaudeUpstreamError,
   ClaudeUsageLimitError,
   assembleOnboardingReplyPrompt,
@@ -152,6 +153,128 @@ test("selectClaudeModel keeps short onboarding turns on Haiku and routes structu
     }).tier,
     "sonnet"
   );
+  assert.equal(
+    selectClaudeModel(routing, {
+      task: "shopping-product-selection",
+      transcriptMessageCount: 0,
+      promptChars: 300
+    }).tier,
+    "haiku"
+  );
+});
+
+test("createClaudeService parses shopping product selections and routes larger tie-breaker prompts to Sonnet", async () => {
+  const calls: Array<{ model: string; system: string; content: string }> = [];
+  const service = createClaudeService({
+    config: createAnthropicTestConfig(),
+    client: {
+      async createMessage(request) {
+        calls.push({
+          model: request.model,
+          system: request.system,
+          content: request.messages[0]?.content ?? ""
+        });
+
+        return {
+          id: "msg_shopping_1",
+          model: request.model,
+          text: JSON.stringify({
+            selectedProductId: "product-2",
+            reason: "The 500 g canned tomatoes best match the ingredient and required quantity."
+          }),
+          stopReason: "end_turn",
+          usage: {
+            inputTokens: 75,
+            outputTokens: 22
+          }
+        };
+      }
+    }
+  });
+
+  const result = await service.selectShoppingProduct({
+    ingredientName: "tomatoes",
+    requiredQuantity: 1000,
+    requiredUnit: "g",
+    profile: {
+      dietaryRestrictions: ["vegetarian"],
+      allergies: {
+        normalized: [],
+        freeText: []
+      },
+      favoriteIngredients: ["tomatoes"],
+      dislikedIngredients: [],
+      cuisinePreferences: ["Mediterranean"],
+      budgetBand: "medium"
+    },
+    candidates: [
+      {
+        id: "product-1",
+        name: "Rosii cherry 250 g",
+        price: 7.99,
+        currency: "RON",
+        unit: "250 g",
+        category: "Legume",
+        tags: [],
+        availability: "in_stock",
+        searchRank: 0
+      },
+      {
+        id: "product-2",
+        name: "Rosii cuburi 500 g",
+        price: 8.49,
+        currency: "RON",
+        unit: "500 g",
+        category: "Conserve",
+        tags: [],
+        availability: "in_stock",
+        searchRank: 1
+      }
+    ]
+  });
+
+  assert.equal(calls[0]?.model, "claude-3-7-sonnet-latest");
+  assert.equal(calls[0]?.system.includes("best Freshful catalog candidate"), true);
+  assert.equal(calls[0]?.content.includes('"ingredientName":"tomatoes"'), true);
+  assert.equal(result.selectedProductId, "product-2");
+  assert.equal(result.parseFailureReason, null);
+  assert.equal(result.usage.modelTier, "sonnet");
+});
+
+test("assembleShoppingProductSelectionPrompt includes ingredient, profile, and candidate constraints", () => {
+  const prompt = assembleShoppingProductSelectionPrompt({
+    ingredientName: "tomatoes",
+    requiredQuantity: 1000,
+    requiredUnit: "g",
+    profile: {
+      dietaryRestrictions: ["vegetarian"],
+      allergies: {
+        normalized: [],
+        freeText: []
+      },
+      favoriteIngredients: ["tomatoes"],
+      dislikedIngredients: ["celery"],
+      cuisinePreferences: ["Romanian"],
+      budgetBand: "medium"
+    },
+    candidates: [
+      {
+        id: "product-1",
+        name: "Rosii cuburi 500 g",
+        price: 8.49,
+        currency: "RON",
+        unit: "500 g",
+        category: "Conserve",
+        tags: ["romanesc"],
+        availability: "in_stock",
+        searchRank: 0
+      }
+    ]
+  });
+
+  assert.equal(prompt.system.includes("selectedProductId"), true);
+  assert.equal(prompt.messages[0]?.content.includes('"ingredientName":"tomatoes"'), true);
+  assert.equal(prompt.messages[0]?.content.includes('"id":"product-1"'), true);
 });
 
 test("assembleMealPlanPrompt embeds request constraints and profile context", () => {
