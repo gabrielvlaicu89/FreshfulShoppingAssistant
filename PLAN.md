@@ -225,7 +225,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Run the full root lint, typecheck, and test commands; include any package-level integration suites required by the new harness.
 	Review: Required; reviewer verifies coverage is targeted at the highest-risk product flows rather than broad but shallow checks.
 
-- [ ] P9-S3: Refresh repository documentation and operational guidance for the real product
+- [x] P9-S3: Refresh repository documentation and operational guidance for the real product
 	Owner: Coder
 	Depends on: P9-S2
 	Acceptance: README.md and supporting docs describe the actual Freshful Shopping Assistant stack, setup, environment requirements, validation commands, workflow expectations, and known v1 limitations instead of the current boilerplate-only positioning.
@@ -253,6 +253,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
 
 
 

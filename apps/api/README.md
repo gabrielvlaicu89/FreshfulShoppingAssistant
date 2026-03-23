@@ -1,108 +1,159 @@
 # API Workspace
 
-This workspace now includes the persistence foundation from P2-S2 plus the backend auth slice from P3-S2.
+This workspace contains the Fastify backend for the Freshful Shopping Assistant. It owns authentication, validated runtime configuration, AI orchestration, household profile persistence, meal-planner generation and refinement, Freshful catalogue access, shopping-list generation, and the operational safeguards around those flows.
 
-## Persistence Stack
+## Backend Responsibilities
 
-- Runtime driver: `postgres`
-- ORM and schema management: `drizzle-orm`
-- Migration generation: `drizzle-kit`
-- Local development database: `docker compose` with PostgreSQL 16 in `compose.yaml`
-- Test database: in-memory `@electric-sql/pglite` with the generated SQL migrations applied during tests
+The API currently provides:
 
-## Commands
+- health and readiness reporting
+- Google ID-token verification and app-session issuance
+- authenticated household profile reads and writes
+- AI onboarding chat with transcript persistence and structured profile extraction
+- meal-plan creation, retrieval, and refinement with revision tracking
+- Freshful catalogue search, product detail normalization, cache recency metadata, and refresh tooling
+- shopping-list draft creation, priced item selection, and persisted list retrieval
+- request logging, correlation context, AI usage metering, budget controls, and Freshful request throttling
 
-- `npm run db:dev:up --workspace @freshful/api` starts a local PostgreSQL instance
-- `npm run db:generate --workspace @freshful/api` generates SQL migrations from the TypeScript schema without requiring a live database
-- `npm run db:migrate --workspace @freshful/api` applies the generated migrations to the database identified by `DATABASE_URL`
+## Stack
+
+- Runtime: Node.js and TypeScript
+- HTTP layer: Fastify
+- Validation and contracts: Zod plus `@freshful/contracts`
+- Database: PostgreSQL via `postgres` and `drizzle-orm`
+- Migrations: `drizzle-kit` plus checked-in SQL under `drizzle/`
+- Test persistence: `@electric-sql/pglite` applying the real migrations in memory
+
+## Main Modules
+
+- `src/app.ts`: application factory, route registration, auth middleware, and service wiring
+- `src/index.ts`: production entrypoint that starts the bound server
+- `src/config.ts`: validated backend runtime configuration
+- `src/db/`: database config, client creation, schema, and migration runner
+- `src/auth/`: Google verification, user repository, JWT session issue and verify flow
+- `src/onboarding/`: chat transcript persistence and structured profile extraction
+- `src/planner/`: plan creation, retrieval, refinement, and revision history
+- `src/freshful/`: catalogue client, normalization, cache policy, and refresh runner
+- `src/shopping/`: ingredient aggregation, priced list generation, and persistence
+- `src/ai/`: Anthropic client, prompt assembly, routing, parsing, and budget controls
+
+## Key Routes
+
+The current HTTP surface includes:
+
+- `GET /health`
+- `POST /auth/google`
+- `GET /profile`
+- `PUT /profile`
+- `POST /ai/onboarding-chat`
+- `POST /plans`
+- `GET /plans/:id`
+- `POST /plans/:id/refine`
+- `POST /plans/:id/shopping-list`
+- `GET /shopping-lists/:id`
+
+All user-specific routes are scoped from the backend-issued bearer token rather than client-supplied user IDs.
 
 ## Local Setup
 
-1. Ensure `apps/api/.env` exists. `npm run env:bootstrap` will create it from the example file if needed.
-2. Start PostgreSQL with `npm run db:dev:up --workspace @freshful/api`.
-3. Generate or refresh migrations with `npm run db:generate --workspace @freshful/api`.
-4. Apply them with `npm run db:migrate --workspace @freshful/api`.
+1. Create `apps/api/.env` if it does not already exist.
 
-Sensitive profile and transcript fields are explicitly marked in the schema metadata so later service layers can enforce stricter handling around health-related profile data and raw chat content.
+```bash
+npm run env:bootstrap
+```
 
-## Runtime Configuration
+2. Fill in the required local values.
 
-The backend now uses a validated runtime config loader in `src/config.ts`. It reads `apps/api/.env`, applies safe defaults for local development where appropriate, and refuses to start when required values are missing or malformed.
+3. Start PostgreSQL.
 
-Database-only tooling uses `src/db/config.ts`, which validates only `DATABASE_URL` so migrations and other persistence flows do not require unrelated backend secrets.
+```bash
+npm run db:dev:up --workspace @freshful/api
+```
 
-Required backend environment variables:
+4. Apply migrations.
 
-- `APP_ENV`: `development`, `test`, or `production`
-- `PORT`: local API port for the backend runtime
-- `DATABASE_URL`: PostgreSQL connection string for Drizzle and runtime access
-- `APP_SESSION_SECRET`: symmetric signing secret for app-issued JWT sessions; use at least 32 characters
-- `APP_SESSION_TTL_SECONDS`: app session lifetime used for issued JWT access tokens
-- `GOOGLE_WEB_CLIENT_ID`: Google OAuth client ID used for backend token verification in later auth steps
-- `ANTHROPIC_API_KEY`: server-side Claude access key; never expose this to the mobile app
-- `FRESHFUL_BASE_URL`: Freshful origin used by the backend integration layer
-- `FRESHFUL_SEARCH_PATH`: relative Freshful shop search prefix used by the adapter runtime, currently `/api/v2/shop/search`
-- `FRESHFUL_REQUEST_TIMEOUT_MS`: request timeout budget for Freshful catalogue calls
+```bash
+npm run db:migrate --workspace @freshful/api
+```
 
-## Freshful Cache Refresh
+5. Start the API.
 
-P7-S3 adds explicit recency evaluation for cached search results and product detail records:
+```bash
+npm run start --workspace @freshful/api
+```
 
-- Search cache TTL: 15 minutes
-- Product detail TTL: 6 hours
-- Stale fallback window for degraded reads: 24 hours from the last successful Freshful observation
+The default local port is `3000` unless overridden in `apps/api/.env`.
 
-Every normalized Freshful product persists `lastSeenAt`, and search cache envelopes now expose computed recency metadata so upstream shopping-list pricing logic can distinguish fresh versus stale estimates.
+## Environment Variables
 
-To refresh cached catalogue data on demand or from a scheduler:
+The checked-in `apps/api/.env.example` lists the full runtime contract.
 
-- `npm run freshful:refresh --workspace @freshful/api` refreshes stale cached searches and product details.
-- `npm run freshful:refresh --workspace @freshful/api -- --mode=all --search-limit=25 --product-limit=25` refreshes the oldest cached records regardless of freshness.
-- `npm run freshful:refresh --workspace @freshful/api -- --query=lapte --product=100003632:100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l` forces an on-demand refresh for explicit targets.
+Required groups are:
 
-Secret handling rules for this workspace:
+- runtime mode and port: `APP_ENV`, `PORT`
+- database access: `DATABASE_URL`
+- app-session signing: `APP_SESSION_SECRET`, `APP_SESSION_TTL_SECONDS`
+- Google auth verification: `GOOGLE_WEB_CLIENT_ID`
+- Anthropic access and routing: `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_VERSION`, model names, prompt and output limits, routing thresholds, and budget settings
+- Freshful integration controls: `FRESHFUL_BASE_URL`, `FRESHFUL_SEARCH_PATH`, timeout, retry, and minimum request interval values
 
-- Keep live `DATABASE_URL` and `ANTHROPIC_API_KEY` values in local `.env` files or deployment secret stores only.
-- Commit only `.env.example` templates with placeholder values.
-- Do not mirror third-party secrets into `apps/mobile/.env`; the mobile runtime should only receive safe client-visible values.
+Keep all live secrets in untracked local env files or deployment secret managers. Nothing from this file should be copied into `apps/mobile/.env` unless it is explicitly client-safe.
 
-## HTTP Foundation
+## Commands
 
-P3-S1 adds a Fastify-based HTTP shell that keeps startup and tests separate:
+- `npm run start --workspace @freshful/api`: start the Fastify server
+- `npm run typecheck --workspace @freshful/api`: run the backend TypeScript check
+- `npm run db:dev:up --workspace @freshful/api`: start the local PostgreSQL container
+- `npm run db:dev:down --workspace @freshful/api`: stop and remove the local PostgreSQL container
+- `npm run db:generate --workspace @freshful/api`: generate Drizzle SQL migrations from schema changes
+- `npm run db:migrate --workspace @freshful/api`: apply migrations using `DATABASE_URL`
+- `npm run freshful:refresh --workspace @freshful/api`: refresh stale Freshful cache entries
+- `npm run freshful:refresh --workspace @freshful/api -- --mode=all --search-limit=25 --product-limit=25`: refresh the oldest cached entries regardless of freshness
+- `npm run freshful:refresh --workspace @freshful/api -- --query=lapte --product=100003632:100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l`: refresh explicit catalogue targets
 
-- `src/app.ts` exports `createApiApp()` so tests can instantiate the server without binding a real port.
-- `src/index.ts` starts the real HTTP server only when the workspace entrypoint is executed directly.
-- `GET /health` provides a smoke-testable readiness endpoint with environment metadata and placeholder service wiring for auth, AI, planner, and Freshful modules.
-- Request and response logging hooks emit structured fields for request ID, method, URL, status code, and duration.
-- Structured error payloads follow the shared contracts package so later modules can fail consistently.
+## Database And Cache Operations
 
-## Auth Endpoint
+Persistence and catalogue behavior are intentionally explicit:
 
-P3-S2 adds server-side Google token verification and local app session issuance:
+- Generated SQL lives in `drizzle/` and should stay in sync with `src/db/schema.ts`.
+- Local development uses Docker Compose PostgreSQL.
+- Tests use PGlite and the real SQL migrations rather than a parallel schema stub.
+- Every normalized Freshful product stores `lastSeenAt`.
+- Search results use a 15-minute freshness target.
+- Product detail records use a 6-hour freshness target.
+- Stale fallback reads are allowed for up to 24 hours when Freshful is temporarily unavailable.
 
-- `POST /auth/google` accepts `{ "idToken": "..." }`.
-- The backend verifies the Google ID token against `GOOGLE_WEB_CLIENT_ID`.
-- The local `users` row is created or updated using the verified Google subject and profile fields.
-- The response returns app-scoped session material for the mobile client: a signed bearer JWT plus the local user snapshot.
+See `src/freshful/README.md` for the adapter contract and anti-fragility notes.
 
-The issued JWT is intentionally app-scoped rather than a pass-through Google token. It uses the backend-managed `APP_SESSION_SECRET`, includes issuer and expiry claims, and is suitable for later protected-route middleware in P3-S3.
+## Validation Strategy
 
-## Profile Endpoints
+For backend-focused changes, the usual command set is:
 
-P3-S3 adds authenticated profile reads and writes:
+```bash
+npm run hooks:validate
+npm run lint
+npm run typecheck --workspace @freshful/api
+npm run test:backend
+```
 
-- `GET /profile` returns the authenticated user's structured household profile or `null` when no profile has been saved yet.
-- `PUT /profile` accepts the shared household profile shape except for server-owned `userId` and `rawChatHistoryId`, which are derived and managed by the backend.
+Add these when relevant:
 
-Sensitive-data handling for this step is explicit:
+- `npm run test:persistence` when touching schema, migrations, or ownership rules
+- `npm test` when a change can affect default root validation coverage
 
-- Dietary restrictions, allergy data, medical flags, and related profile fields stay server-side in the `household_profiles` table.
-- Access is scoped only from the backend-issued app JWT subject; clients do not provide a user ID.
-- When a profile is first created through `PUT /profile`, the backend creates a placeholder transcript record that does not duplicate the sensitive field values. This preserves the current schema contract without copying health-related content into transcript history.
-- Application-level field encryption is not introduced in this step. The current boundary relies on authenticated access control plus database or infrastructure encryption at rest.
+The root backend tests cover auth, onboarding, planner, shopping, Freshful integration, persistence, and runtime-config behavior.
 
-To start the backend foundation locally after bootstrapping env files:
+## Operational Notes
 
-- `npm run start --workspace @freshful/api`
+- `src/app.ts` exports the app factory so tests can use `app.inject()` without binding a real port.
+- Structured error payloads follow the shared contracts package.
+- Request logging includes correlation-friendly metadata such as request ID, method, URL, status code, and duration.
+- Anthropic usage is budgeted and metered before upstream calls are allowed.
+- Freshful access is intentionally conservative because the integration depends on public storefront behavior rather than a public partner API.
 
-To smoke-test the foundation without a bound port, use the root test suite, which exercises Fastify through `app.inject()`.
+## Current Limitations
+
+- Freshful support is read-only catalogue integration. User login, cart mutation, checkout, and address-bound sessions are not implemented.
+- Pricing is estimate-oriented and depends on Freshful cache recency.
+- The API assumes valid local Google and Anthropic credentials for non-mocked development flows.
+- Application-level field encryption is not introduced yet; the current boundary is authenticated access control plus database or infrastructure encryption at rest.

@@ -1,148 +1,192 @@
 # Freshful Shopping Assistant
 
-Freshful Shopping Assistant is an Android-first AI grocery planning product for Romanian users. The goal is to capture a household profile through chat, generate meal plans, map those plans to Freshful products, and return a practical shopping list backed by a TypeScript mobile app, a Node backend, and shared contracts.
+Freshful Shopping Assistant is an Android-first meal-planning and grocery-assistant product for Romanian users. The current v1 stack captures a household profile through AI-assisted onboarding, generates and refines meal plans, maps ingredients to Freshful catalogue products, and returns a grouped shopping list with estimated pricing and a Freshful handoff.
 
-The repository is no longer just a Copilot starter. It already contains the project specification in [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md), an execution plan in [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md), a scaffolded monorepo, shared runtime contracts, and the first backend persistence slice.
+This repository is a real product monorepo, not a starter template. It contains the mobile client, backend API, shared contracts, database migrations, orchestration workflow files, and automated validation used to ship the current implementation.
 
-## Current Status
+## Product Scope
 
-- `P1-S1`, `P1-S2`, `P1-S3`, `P2-S1`, `P2-S2`, `P2-S3`, `P3-S1`, `P3-S2`, and `P3-S3` are complete.
-- The repo now includes `apps/api`, `apps/mobile`, and `packages/contracts` npm workspaces.
-- Shared domain contracts and runtime schemas live in `@freshful/contracts`.
-- The backend now has PostgreSQL persistence, Drizzle schema definitions, generated migrations, local Docker Compose config, and ownership-safe persistence tests.
-- Repository-level env examples, validated config loaders, and workspace runtime configuration docs are now in place for the API and mobile workspaces.
-- The API workspace now includes the HTTP foundation, Google token verification, app session issuance, and authenticated profile read and update endpoints with explicit sensitive-field handling.
+The implemented system currently includes:
 
-## Implemented Architecture
+- Google Sign-In on mobile with backend token verification and app-session issuance.
+- Authenticated onboarding and profile flows backed by shared household-profile contracts.
+- AI-driven meal-plan generation and plan refinement with saved revisions.
+- Freshful catalogue search, product normalization, cache recency tracking, and refresh utilities.
+- Shopping-list draft generation with ingredient aggregation, product matching, grouped mobile display, and Freshful open-link handoff.
+- Backend observability, request correlation, Anthropic usage metering, budget controls, and Freshful request safeguards.
 
-- Mobile target: Android-first React Native client in `apps/mobile`, with a bare Android scaffold, native-stack navigation, Zustand shell state, and TanStack Query wiring.
-- Backend target: Node.js and TypeScript API in `apps/api`.
-- Shared package: `packages/contracts` for cross-runtime types and `zod` schemas.
-- Database: PostgreSQL with Drizzle ORM and generated SQL migrations.
-- Local database workflow: Docker Compose in `apps/api/compose.yaml`.
-- Test persistence workflow: `@electric-sql/pglite` applies generated migrations in tests without needing a live Postgres instance.
+## Stack
 
-## Repository Structure
+- Monorepo: npm workspaces
+- Mobile app: React Native 0.76, TypeScript, React Navigation, Zustand, TanStack Query
+- Backend API: Node.js, TypeScript, Fastify, Zod, Google auth verification, Anthropic integration
+- Shared contracts: `packages/contracts` with runtime schemas and shared types
+- Persistence: PostgreSQL, Drizzle ORM, generated SQL migrations, local Docker Compose for development
+- Test utilities: `tsx --test` for backend and contract suites, Jest for mobile, PGlite for migration-backed persistence tests
+
+## Workspace Layout
 
 ```text
 .
 ├── apps/
-│   ├── api/
-│   │   ├── compose.yaml
-│   │   ├── drizzle/
-│   │   ├── drizzle.config.ts
-│   │   └── src/
-│   │       └── db/
-│   └── mobile/
-├── docs/
-│   └── architecture/
+│   ├── api/            # Fastify API, Drizzle schema, Freshful adapter, AI services
+│   └── mobile/         # React Native Android app
 ├── packages/
-│   └── contracts/
-├── tests/
-├── scripts/
-├── DESCRIPTION.md
-├── PLAN.md
-└── package.json
+│   └── contracts/      # Shared contracts, schemas, and runtime types
+├── docs/               # Architecture and workflow notes
+├── scripts/            # Repo automation, env bootstrap, validation, progress helpers
+├── tests/              # Root backend and contract test suites
+├── DESCRIPTION.md      # Product contract
+├── PLAN.md             # Execution plan
+└── .ai/                # Orchestrator state and last-run metadata
 ```
 
-## Getting Started
+## Prerequisites
 
-1. Install dependencies with `npm install`.
-2. Bootstrap local env files with `npm run env:bootstrap`.
-3. Review the product specification in [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md).
-4. Review the current implementation plan in [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md).
-5. Run `npm run lint`, `npm run typecheck`, and `npm test` to validate the current workspace.
+- Node.js 18 or newer
+- npm with workspace support
+- Docker Desktop or Docker Engine for local PostgreSQL
+- Android development tooling if you want to run the mobile app on an emulator or device
+- Google OAuth client IDs for backend verification and Android sign-in
+- An Anthropic API key for AI-backed onboarding, planning, and shopping selection flows
+
+## Setup
+
+1. Install dependencies.
+
+```bash
+npm install
+```
+
+2. Bootstrap local environment files from the checked-in templates.
+
+```bash
+npm run env:bootstrap
+```
+
+3. Fill in the generated `apps/api/.env` and `apps/mobile/.env` files with real local values.
+
+4. Start the local PostgreSQL instance for the API workspace.
+
+```bash
+npm run db:dev:up --workspace @freshful/api
+```
+
+5. Apply the checked-in database migrations.
+
+```bash
+npm run db:migrate
+```
+
+6. Start the API and Metro together, or run them separately if you prefer.
+
+```bash
+npm start
+```
+
+7. To install and launch the Android app, run:
+
+```bash
+npm run android --workspace @freshful/mobile
+```
+
+For Android emulators, the default checked-in mobile API base URL assumes `http://10.0.2.2:3000`.
+
+## Environment Model
+
+Environment handling is intentionally split by runtime:
+
+- `apps/api/.env` contains server-only values such as `DATABASE_URL`, `APP_SESSION_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `ANTHROPIC_API_KEY`, and Freshful integration controls.
+- `apps/mobile/.env` contains only client-safe values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`, and request timeouts.
+
+Checked-in examples define the required keys without live credentials.
+
+API environment variables cover:
+
+- app environment and port
+- PostgreSQL connection details
+- app-session signing configuration
+- Google token verification
+- Anthropic model, timeout, routing, and budget limits
+- Freshful base URL, timeout, retry, and rate-control settings
+
+Mobile environment variables cover:
+
+- app environment
+- backend base URL
+- Google Android and web client IDs
+- request timeout budget
 
 ## Development Commands
 
-- `npm run env:bootstrap`: create `apps/api/.env` and `apps/mobile/.env` from checked-in examples.
-- `npm run env:check`: fail fast if local env files are missing.
+Root-level commands:
+
+- `npm run env:bootstrap`: create missing workspace `.env` files from `.env.example`.
+- `npm run env:check`: fail if required workspace `.env` files are missing.
+- `npm run hooks:validate`: validate the repo automation contract files exist and DESCRIPTION.md is no longer boilerplate.
 - `npm run lint`: run ESLint across the repository.
 - `npm run typecheck`: run TypeScript checks across all workspaces.
-- `npm test`: run the default validation suite across shared/backend tests plus the critical mobile integration screens.
+- `npm test`: run the default validation suite: root backend and contract tests plus the critical mobile integration tests.
 - `npm run test:backend`: run the root `tests/*.test.ts` suite only.
-- `npm run test:mobile:critical`: run the mobile planner preview, shopping list, and app shell integration suites used by the default root validation.
-- `npm run typecheck:mobile`: run the React Native mobile workspace typecheck only.
-- `npm run test:mobile`: run the mobile Jest screen test suite.
-- `npm run android:smoke:mobile`: build the Android JS bundle for the mobile app without requiring an emulator.
-- `npm run test:persistence`: run the database-focused persistence tests only.
-- `npm run db:generate`: generate Drizzle SQL migrations from the API schema.
-- `npm run db:migrate`: apply generated migrations to the database configured by `DATABASE_URL`.
-- `npm start`: run the current placeholder workspace startup flow.
+- `npm run test:persistence`: run the migration-backed persistence suite.
+- `npm run test:mobile:critical`: run the mobile app-shell, planner-preview, and shopping-list tests used by the default root suite.
+- `npm run test:mobile`: run the full mobile Jest suite.
+- `npm run typecheck:mobile`: run only the mobile workspace TypeScript check.
+- `npm run android:smoke:mobile`: build the Android bundle and native debug shell without requiring an emulator.
+- `npm run db:generate`: generate Drizzle migrations from the API schema.
+- `npm run db:migrate`: apply generated migrations using `DATABASE_URL`.
+- `npm start`: bootstrap env files and start the API workspace plus Metro.
 
-## Environment And Secrets
+Useful workspace commands:
 
-This repo keeps runtime configuration separated by workspace:
+- `npm run start --workspace @freshful/api`
+- `npm run freshful:refresh --workspace @freshful/api`
+- `npm run start --workspace @freshful/mobile`
+- `npm run android --workspace @freshful/mobile`
 
-- `apps/api/.env` is for backend-only settings, including `DATABASE_URL`, `APP_SESSION_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `ANTHROPIC_API_KEY`, and Freshful integration values.
-- `apps/mobile/.env` is limited to safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, and request timeout settings used to inject mobile runtime config.
-- `apps/mobile/.env` is limited to safe client-visible values such as `API_BASE_URL`, `GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`, and request timeout settings used to inject mobile runtime config.
+## Validation Defaults
 
-The checked-in `.env.example` files define the required keys without containing live credentials. `npm run env:bootstrap` copies those templates locally if the real `.env` files do not exist yet. Keep actual secrets in untracked local env files for development and in your deployment secret manager for shared environments.
+The default repository validation flow is:
 
-Current validated runtime loaders:
+```bash
+npm run hooks:validate
+npm run lint
+npm run typecheck
+npm test
+```
 
-- `apps/api/src/config.ts` validates the full backend runtime settings for environment selection, HTTP port, database access, app-session signing, Google auth, Anthropic access, and Freshful integration, while `apps/api/src/db/config.ts` keeps DB-only tooling limited to `DATABASE_URL`.
-- `apps/mobile/src/config.ts` validates injected mobile runtime settings that are safe to keep on-device and explicitly excludes server-side secrets and local file reads at app runtime.
+Important scope notes:
 
-## API Persistence Workflow
+- `npm test` is intentionally narrower than every available suite. It covers the root backend and contracts tests plus the critical mobile flows.
+- Use `npm run test:mobile` when you need the complete mobile Jest suite.
+- Use `npm run android:smoke:mobile` for a native packaging sanity check.
+- Use `npm run test:persistence` when touching migrations or database ownership rules.
 
-The backend persistence foundation is implemented in `apps/api`.
+## Workflow Expectations
 
-- Schema definitions live in `apps/api/src/db/schema.ts`.
-- Database config loading lives in `apps/api/src/db/config.ts`.
-- Runtime connection setup lives in `apps/api/src/db/client.ts`.
-- Migration application lives in `apps/api/src/db/migrate.ts`.
-- Generated SQL migrations live in `apps/api/drizzle/`.
-- Local Postgres is defined in `apps/api/compose.yaml`.
+This repository follows a DESCRIPTION.md-first, plan-first workflow.
 
-Typical local database flow:
+1. `DESCRIPTION.md` is the product contract and should stay implementation-oriented rather than status-oriented.
+2. `PLAN.md` is the execution contract. Work should be scoped to one plan step or one narrow fix at a time.
+3. `.ai/state.json` and `.ai/last-run.md` are the machine-readable workflow state used by the orchestrator.
+4. Use the helper scripts in `scripts/` when updating progress instead of ad hoc edits where practical.
+5. Validation and review happen before a plan step is considered complete.
 
-1. Run `npm run db:dev:up --workspace @freshful/api`.
-2. Run `npm run db:generate --workspace @freshful/api` if the schema changed.
-3. Run `npm run db:migrate --workspace @freshful/api`.
-4. Run `npm run test:persistence` to validate schema and migration behavior.
+For this step, do not treat README text as a substitute for the product contract in `DESCRIPTION.md` or the execution history in `PLAN.md`.
 
-## Shared Contracts
+## Current v1 Limitations
 
-`packages/contracts` now contains shared domain types and runtime validation for:
+- Android-first only. There is no iOS or web client in scope.
+- Google Sign-In is the only implemented auth path.
+- Freshful is the only supported retailer.
+- Freshful integration is read-only catalogue access plus shopping-list handoff. Cart autofill, checkout, login-bound sessions, and address-specific cart management are not implemented.
+- Shopping prices are estimates based on cached or refreshed catalogue data and can become stale.
+- The product relies on developer-supplied Google and Anthropic credentials for local development.
+- The root default test command does not replace the full mobile suite or platform-level device testing.
 
-- household profiles
-- onboarding transcripts and chat messages
-- recipes and ingredient structures
-- meal plan templates, instances, and overrides
-- Freshful product and search metadata
-- shopping lists and shopping list items
-- API error payloads
+## Supporting Docs
 
-These contracts are used to keep the mobile app, backend, and persistence model aligned.
-
-## Project Workflow
-
-The repo still uses the plan-first orchestration flow, but it now operates on a real product codebase rather than a blank template.
-
-1. Product intent is defined in [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md).
-2. Execution steps are tracked in [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md).
-3. Automation state is stored in `.ai/state.json` and `.ai/last-run.md`.
-4. The normal implementation loop is: implement one plan step, validate it, review it, then update plan and state.
-
-## What Is Still Placeholder
-
-- The mobile workspace now contains the real React Native shell with Google Sign-In, backend session exchange, secure session restoration, and logout handling; local profile caching remains pending for `P4-S3`.
-- The API workspace now has the HTTP foundation, Google token verification, app session issuance, and protected profile endpoints, but it does not yet include AI orchestration or the Freshful adapter.
-
-## Validation Baseline
-
-The current repo is expected to pass these commands from the root:
-
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-- `npm run db:generate`
-- `npm run test:persistence`
-
-## References
-
-- Product contract: [DESCRIPTION.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/DESCRIPTION.md)
-- Execution plan: [PLAN.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/PLAN.md)
-- API persistence notes: [apps/api/README.md](/home/gabriel-vlaicu/Projects/FreshfulShoppingAssistant/apps/api/README.md)
+- `apps/api/README.md` documents the backend modules, env requirements, and operational commands.
+- `apps/mobile/README.md` documents the mobile flows, env requirements, and validation strategy.
+- `apps/api/src/freshful/README.md` documents the Freshful catalogue contract and cache recency model.
+- `docs/architecture/p1-s1-workspace-stack.md` captures the initial workspace architecture decisions.
