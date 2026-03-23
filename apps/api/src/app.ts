@@ -32,6 +32,10 @@ import {
   summarizeServiceStates,
   type ApiServices
 } from "./services.js";
+import { createFreshfulCatalogClient, type FreshfulCatalogClient } from "./freshful/client.js";
+import type { FreshfulCatalogAdapter } from "./freshful/contracts.js";
+import { createFreshfulCatalogRepository, type FreshfulCatalogRepository } from "./freshful/repository.js";
+import { createFreshfulCatalogService } from "./freshful/service.js";
 import { onboardingChatRequestSchema, onboardingChatResponseSchema } from "./onboarding/contracts.js";
 import { createOnboardingTranscriptRepository, type OnboardingTranscriptRepository } from "./onboarding/repository.js";
 import { createOnboardingService, type OnboardingService } from "./onboarding/service.js";
@@ -109,6 +113,11 @@ export interface CreateApiAppOptions {
     repository?: PlannerRepository;
     service?: PlannerService;
   };
+  freshful?: {
+    client?: FreshfulCatalogClient;
+    repository?: FreshfulCatalogRepository;
+    service?: FreshfulCatalogAdapter;
+  };
 }
 
 declare module "fastify" {
@@ -184,6 +193,10 @@ function isPlannerService(value: unknown): value is PlannerService {
     "getPlan" in value &&
     "refinePlan" in value
   );
+}
+
+function isFreshfulCatalogService(value: unknown): value is FreshfulCatalogAdapter {
+  return typeof value === "object" && value !== null && "searchProducts" in value && "getProductDetails" in value;
 }
 
 function extractBearerToken(authorizationHeader: string | string[] | undefined): string {
@@ -297,6 +310,22 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
           profileService,
           aiService: aiImplementation
         });
+  const freshfulRepository = options.freshful?.repository ??
+    createFreshfulCatalogRepository(
+      (ownedDatabase ??=
+        createApiDatabase({
+          databaseUrl: config.databaseUrl,
+          maxConnections: config.appEnv === "production" ? 5 : 1
+        })).db
+    );
+  const freshfulService = isFreshfulCatalogService(options.freshful?.service)
+    ? options.freshful.service
+    : isFreshfulCatalogService(options.services?.freshful?.implementation)
+      ? options.services.freshful.implementation
+      : createFreshfulCatalogService({
+          repository: freshfulRepository,
+          client: options.freshful?.client ?? createFreshfulCatalogClient({ config: config.freshful })
+        });
   const appContext: ApiAppContext = {
     config,
     services: createApiServices({
@@ -315,6 +344,11 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
         name: "planner",
         status: aiImplementation ? "ready" : "pending",
         implementation: plannerService
+      },
+      freshful: options.services?.freshful ?? {
+        name: "freshful",
+        status: "ready",
+        implementation: freshfulService
       }
     }),
     startedAt: new Date().toISOString(),

@@ -130,6 +130,174 @@ export const freshfulAdapterSearchInputFixture: FreshfulCatalogSearchInput = {
   }
 };
 
+export const freshfulRecordedSearchInputFixture: FreshfulCatalogSearchInput = {
+  query: "lapte"
+};
+
+export const freshfulRecordedSearchResponseFixture = {
+  page: 1,
+  itemsPerPage: 30,
+  pages: 3,
+  total: 64,
+  items: [
+    {
+      sponsored: null,
+      scoreExplained: null,
+      code: "100003632",
+      variantCode: "100003632",
+      name: "Lapte de la vaca 3.8-4.1% grasime, 1l",
+      slug: "100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l",
+      unitPriceLabel: "10,99 Lei/l",
+      brand: "Laptaria cu caimac",
+      brandCode: "1",
+      brandFilterCode: "laptaria-cu-caimac-b1",
+      sku: "100003632",
+      price: 10.99,
+      originalPrice: 12.69,
+      currencyCode: "RON",
+      currency: "Lei",
+      image: {
+        thumbnail: {
+          default: "https://cdn.freshful.ro/media/cache/sylius_shop_product_thumbnail/71/1e/7dddeae4da51a8a85dfd2c876a21.jpg"
+        },
+        large: {
+          default: "https://cdn.freshful.ro/media/cache/freshful_large/71/1e/7dddeae4da51a8a85dfd2c876a21.jpg"
+        }
+      },
+      tags: [
+        {
+          type: "MadeInRomania",
+          text: "Made In Romania",
+          icon: "https://cdn.freshful.ro/assets/product_tags/made_in_romania.svg",
+          iconPng: "https://cdn.freshful.ro/assets/product_tags/made_in_romania.png",
+          backgroundColor: "#EDF2FD",
+          textColor: "#1653CA"
+        }
+      ],
+      isAvailable: true,
+      maxAvailableQuantity: 100,
+      maxAllowedQuantity: 100,
+      breadcrumbs: [
+        {
+          code: "4",
+          name: "Lactate & oua",
+          slug: "4-lactate-branzeturi-si-oua"
+        },
+        {
+          code: "401",
+          name: "Lapte, smantana si branza proaspata",
+          slug: "401-lapte-smantana-si-branza-proaspata"
+        },
+        {
+          code: "40101",
+          name: "Lapte proaspat",
+          slug: "40101-lapte-proaspat"
+        },
+        {
+          code: "100003632",
+          name: "Lapte de la vaca 3.8-4.1% grasime, 1l",
+          slug: "100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l"
+        }
+      ]
+    },
+    {
+      sponsored: null,
+      scoreExplained: null,
+      code: "100138896",
+      variantCode: "100138896",
+      name: "Lapte fara lactoza, 3.5% grasime, 1l",
+      slug: "100138896-napolact-lapte-fara-lactoza-3-5-grasime-1l",
+      unitPriceLabel: "9,99 Lei/l",
+      brand: "Napolact",
+      brandCode: "79",
+      brandFilterCode: "napolact-b77",
+      sku: "100138896",
+      price: 9.99,
+      originalPrice: 12.99,
+      currencyCode: "RON",
+      currency: "Lei",
+      image: {
+        thumbnail: {
+          default: "https://cdn.freshful.ro/media/cache/sylius_shop_product_thumbnail/42/14/f0bee6bf3bc65280a0c7a0c0690d.jpg"
+        },
+        large: {
+          default: "https://cdn.freshful.ro/media/cache/freshful_large/42/14/f0bee6bf3bc65280a0c7a0c0690d.jpg"
+        }
+      },
+      tags: [
+        {
+          type: "LactoseFree",
+          text: "Fara lactoza",
+          icon: "https://cdn.freshful.ro/assets/product_tags/fara_lactoza.svg",
+          iconPng: "https://cdn.freshful.ro/assets/product_tags/fara_lactoza.png",
+          backgroundColor: "#E9F7FB",
+          textColor: "#25A6D0"
+        },
+        {
+          type: "MadeInRomania",
+          text: "Made In Romania",
+          icon: "https://cdn.freshful.ro/assets/product_tags/made_in_romania.svg",
+          iconPng: "https://cdn.freshful.ro/assets/product_tags/made_in_romania.png",
+          backgroundColor: "#EDF2FD",
+          textColor: "#1653CA"
+        }
+      ],
+      isAvailable: true,
+      maxAvailableQuantity: 100,
+      maxAllowedQuantity: 100,
+      breadcrumbs: [
+        {
+          code: "4",
+          name: "Lactate & oua",
+          slug: "4-lactate-branzeturi-si-oua"
+        },
+        {
+          code: "401",
+          name: "Lapte, smantana si branza proaspata",
+          slug: "401-lapte-smantana-si-branza-proaspata"
+        },
+        {
+          code: "40101",
+          name: "Lapte proaspat",
+          slug: "40101-lapte-proaspat"
+        },
+        {
+          code: "100138896",
+          name: "Lapte fara lactoza, 3.5% grasime, 1l",
+          slug: "100138896-napolact-lapte-fara-lactoza-3-5-grasime-1l"
+        }
+      ]
+    }
+  ]
+} as const;
+
+export const freshfulRecordedSearchProductReferenceFixture: FreshfulProductReference = {
+  freshfulId: "100003632",
+  slug: "100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l",
+  detailPath: "/p/100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l",
+  detailUrl: "https://www.freshful.ro/p/100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l"
+};
+
+export const freshfulRecordedSearchProductCandidateFixture: FreshfulSearchProductCandidate = {
+  id: "freshful:100003632:100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l",
+  freshfulId: "100003632",
+  name: "Lapte de la vaca 3.8-4.1% grasime, 1l",
+  price: 10.99,
+  currency: "RON",
+  unit: "1l",
+  category: "Lapte proaspat",
+  tags: ["Made In Romania"],
+  imageUrl: "https://cdn.freshful.ro/media/cache/sylius_shop_product_thumbnail/71/1e/7dddeae4da51a8a85dfd2c876a21.jpg",
+  lastSeenAt: freshfulRecordedAt,
+  availability: "in_stock",
+  searchMetadata: {
+    query: freshfulRecordedSearchInputFixture.query,
+    rank: 0,
+    matchedTerm: "lapte"
+  },
+  productReference: freshfulRecordedSearchProductReferenceFixture
+};
+
 export const freshfulProductReferenceFixture: FreshfulProductReference = {
   freshfulId: "100075626",
   slug: freshfulRecordedProductSlug,
@@ -138,7 +306,7 @@ export const freshfulProductReferenceFixture: FreshfulProductReference = {
 };
 
 export const freshfulSearchProductCandidateFixture: FreshfulSearchProductCandidate = {
-  id: "freshful:100075626",
+  id: `freshful:100075626:${freshfulRecordedProductSlug}`,
   freshfulId: "100075626",
   name: "Mix clatite din mei cu afine fara gluten 71g",
   price: 10.91,
@@ -158,7 +326,7 @@ export const freshfulSearchProductCandidateFixture: FreshfulSearchProductCandida
 };
 
 export const freshfulNormalizedProductFixture: FreshfulProduct = {
-  id: "freshful:100075626",
+  id: `freshful:100075626:${freshfulRecordedProductSlug}`,
   freshfulId: "100075626",
   name: "Mix clatite din mei cu afine fara gluten 71g",
   price: 10.91,

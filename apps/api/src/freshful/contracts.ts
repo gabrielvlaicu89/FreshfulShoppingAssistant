@@ -5,6 +5,7 @@ import { z } from "zod";
 const trimmedStringSchema = z.string().trim().min(1);
 const recordedRequestOperationValues = ["search", "product-detail"] as const;
 const recordedRequestSurfaceValues = ["html-page", "next-data"] as const;
+const freshfulCatalogCacheSourceValues = ["network", "cache", "stale-cache"] as const;
 const recordedQueryKeyPartSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 export const freshfulRecordedRequestSchema = z
@@ -83,7 +84,60 @@ export const freshfulSearchProductCandidateSchema = z
   })
   .strict();
 
+export const freshfulCatalogCacheMetadataSchema = z
+  .object({
+    source: z.enum(freshfulCatalogCacheSourceValues),
+    isStale: z.boolean(),
+    fetchedAt: z.string().datetime({ offset: true }),
+    expiresAt: z.string().datetime({ offset: true }),
+    fallbackReason: trimmedStringSchema.optional()
+  })
+  .strict();
+
+export type FreshfulCatalogCacheMetadata = z.infer<typeof freshfulCatalogCacheMetadataSchema>;
+
+export const freshfulCatalogSearchResultSchema = z
+  .object({
+    products: z.array(freshfulSearchProductCandidateSchema),
+    cache: freshfulCatalogCacheMetadataSchema
+  })
+  .strict();
+
+export type FreshfulCatalogSearchResult = z.infer<typeof freshfulCatalogSearchResultSchema>;
+
+export const freshfulCatalogProductDetailResultSchema = z
+  .object({
+    product: z
+      .object({
+        id: trimmedStringSchema,
+        freshfulId: trimmedStringSchema,
+        name: trimmedStringSchema,
+        price: z.number().finite().min(0),
+        currency: z.literal("RON"),
+        unit: trimmedStringSchema,
+        category: trimmedStringSchema,
+        tags: z.array(trimmedStringSchema),
+        imageUrl: z.string().url(),
+        lastSeenAt: z.string().datetime({ offset: true }),
+        availability: z.enum(["in_stock", "low_stock", "out_of_stock", "unknown"]),
+        searchMetadata: z
+          .object({
+            query: trimmedStringSchema,
+            rank: z.number().int().min(0),
+            matchedTerm: trimmedStringSchema.optional()
+          })
+          .strict()
+          .optional()
+      })
+      .strict(),
+    productReference: freshfulProductReferenceSchema,
+    cache: freshfulCatalogCacheMetadataSchema
+  })
+  .strict();
+
+export type FreshfulCatalogProductDetailResult = z.infer<typeof freshfulCatalogProductDetailResultSchema>;
+
 export interface FreshfulCatalogAdapter {
-  searchProducts(input: FreshfulCatalogSearchInput): Promise<FreshfulSearchProductCandidate[]>;
-  getProductDetails(reference: FreshfulProductReference): Promise<FreshfulProduct>;
+  searchProducts(input: FreshfulCatalogSearchInput): Promise<FreshfulCatalogSearchResult>;
+  getProductDetails(reference: FreshfulProductReference): Promise<FreshfulCatalogProductDetailResult>;
 }

@@ -71,6 +71,42 @@ export { closeApiDatabase, createApiDatabase } from "./db/client.js";
 export { ApiHttpError } from "./errors.js";
 export { getApiConfig, resolveApiWorkspacePath } from "./config.js";
 export type { ApiConfig } from "./config.js";
+export {
+  createFreshfulCatalogClient,
+  type CreateFreshfulCatalogClientOptions,
+  type FreshfulCatalogClient
+} from "./freshful/client.js";
+export {
+  freshfulCatalogCacheMetadataSchema,
+  freshfulCatalogProductDetailResultSchema,
+  freshfulCatalogSearchInputSchema,
+  freshfulCatalogSearchResultSchema,
+  freshfulProductReferenceSchema,
+  freshfulRecordedPageObservationSchema,
+  freshfulRecordedRequestSchema,
+  freshfulSearchProductCandidateSchema,
+  type FreshfulCatalogAdapter,
+  type FreshfulCatalogCacheMetadata,
+  type FreshfulCatalogProductDetailResult,
+  type FreshfulCatalogSearchInput,
+  type FreshfulCatalogSearchResult,
+  type FreshfulProductReference,
+  type FreshfulRecordedPageObservation,
+  type FreshfulRecordedRequest,
+  type FreshfulSearchProductCandidate
+} from "./freshful/contracts.js";
+export {
+  FreshfulCatalogError,
+  FreshfulCatalogNormalizationError,
+  FreshfulCatalogUnavailableError
+} from "./freshful/errors.js";
+export {
+  createFreshfulCatalogRepository,
+  type CreateFreshfulCatalogRepositoryOptions,
+  type FreshfulCatalogRepository,
+  type FreshfulDatabase
+} from "./freshful/repository.js";
+export { buildFreshfulSearchCacheKey, createFreshfulCatalogService, type CreateFreshfulCatalogServiceOptions } from "./freshful/service.js";
 export { getDatabaseConfig } from "./db/config.js";
 export { databaseTables, sensitiveTableColumns } from "./db/schema.js";
 export {

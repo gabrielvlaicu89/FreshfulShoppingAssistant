@@ -14,9 +14,9 @@
   },
   "git": {
     "branchStrategy": "current-branch",
-    "autoCommit": false,
-    "autoPush": false,
-    "pushRequiresApproval": true,
+    "autoCommit": true,
+    "autoPush": true,
+    "pushRequiresApproval": false,
     "commitMessageStyle": "step-first"
   },
   "workflow": {

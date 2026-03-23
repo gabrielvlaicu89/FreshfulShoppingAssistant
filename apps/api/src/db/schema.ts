@@ -184,13 +184,16 @@ export const freshfulProducts = pgTable(
     category: text("category").notNull(),
     tags: jsonb("tags").$type<FreshfulProduct["tags"]>().notNull(),
     imageUrl: text("image_url").notNull(),
+    slug: text("slug"),
+    detailPath: text("detail_path"),
+    detailUrl: text("detail_url"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "string" }).notNull(),
     availability: productAvailabilityEnum("availability").notNull(),
     searchMetadata: jsonb("search_metadata").$type<FreshfulProduct["searchMetadata"] | null>(),
     ...timestampColumns
   },
   (table) => ({
-    freshfulIdUniqueIndex: uniqueIndex("freshful_products_freshful_id_idx").on(table.freshfulId),
+    freshfulIdSlugUniqueIndex: uniqueIndex("freshful_products_freshful_id_slug_idx").on(table.freshfulId, table.slug),
     categoryIndex: index("freshful_products_category_idx").on(table.category)
   })
 );
@@ -253,6 +256,7 @@ export const cachedSearchResults = pgTable(
     query: text("query").notNull(),
     filters: jsonb("filters").$type<FreshfulSearchFilters | null>(),
     productIds: jsonb("product_ids").$type<string[]>().notNull(),
+    products: jsonb("products").$type<Record<string, unknown>[]>().notNull().default(sql`'[]'::jsonb`),
     fetchedAt: timestamp("fetched_at", { withTimezone: true, mode: "string" }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
     source: text("source").notNull().default("freshful.search"),

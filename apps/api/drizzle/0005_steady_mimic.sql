@@ -1,0 +1,1 @@
+ALTER TABLE "cached_search_results" ADD COLUMN "products" jsonb DEFAULT '[]'::jsonb NOT NULL;

@@ -1,13 +1,18 @@
 {
   "planningStatus": "in-progress",
-  "currentStepId": "P7-S2",
-  "lastCompletedItemId": "P7-S1",
-  "lastReviewedItemId": "P7-S1",
+  "currentStepId": "P7-S3",
+  "lastCompletedItemId": "P7-S2",
+  "lastReviewedItemId": "P7-S2",
   "lastReviewOutcome": "approved",
   "lastCommitMessage": null,
   "lastPushAttempt": null,
   "phaseCommits": [],
   "recentNotes": [
+    {
+      "timestamp": "2026-03-23T12:17:21.827Z",
+      "stepId": "P7-S2",
+      "note": "P7-S2 accepted after Freshful adapter validation and review; apps/api now provides a cached Freshful catalog adapter for search and product details with recorded-payload normalization, per-query search cache snapshots, stale-cache fallback, composite freshfulId-plus-slug detail identity, and migration-backed schema metadata aligned with the runtime repository."
+    },
     {
       "timestamp": "2026-03-23T11:04:33.666Z",
       "stepId": "P7-S1",
@@ -52,17 +57,12 @@
       "timestamp": "2026-03-22T17:56:06.591Z",
       "stepId": "P4-S2",
       "note": "P4-S2 accepted after mobile auth validation and review; apps/mobile now supports Google Sign-In, backend token exchange, secure backend-session persistence, restore on relaunch, and logout without treating Google tokens as durable app auth state."
-    },
-    {
-      "timestamp": "2026-03-22T17:32:12.488Z",
-      "stepId": "P4-S1",
-      "note": "P4-S1 accepted after mobile scaffold validation and review; apps/mobile now contains an Android-first React Native shell with navigation, Zustand state, React Query health wiring, bundled runtime config integration, design tokens, mobile tests, and an Android smoke command that compiles the native project."
     }
   ],
   "lastRun": {
-    "timestamp": "2026-03-23T11:04:33.666Z",
+    "timestamp": "2026-03-23T12:17:21.827Z",
     "agent": "orchestrator",
-    "action": "update-progress:P7-S1",
+    "action": "update-progress:P7-S2",
     "status": "done"
   }
 }

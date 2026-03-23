@@ -115,6 +115,26 @@ test("getApiConfig allows backend startup without Anthropic settings", () => {
   assert.equal(config.anthropic, null);
 });
 
+test("getApiConfig defaults the Freshful search path to the confirmed shop search surface", () => {
+  const envFilePath = createTemporaryEnvFile(
+    ".env.api",
+    [
+      "APP_ENV=test",
+      "PORT=4100",
+      "DATABASE_URL=postgres://freshful:freshful@localhost:5432/freshful_test",
+      "APP_SESSION_SECRET=abcdefghijklmnopqrstuvwxyz123456",
+      "APP_SESSION_TTL_SECONDS=7200",
+      "GOOGLE_WEB_CLIENT_ID=test-web-client.apps.googleusercontent.com",
+      "FRESHFUL_BASE_URL=https://staging.freshful.ro",
+      "FRESHFUL_REQUEST_TIMEOUT_MS=15000"
+    ].join("\n")
+  );
+
+  const config = getApiConfig({}, envFilePath);
+
+  assert.equal(config.freshful.searchPath, "/api/v2/shop/search");
+});
+
 test("getDatabaseConfig accepts DB-only runtime input without unrelated backend secrets", () => {
   const envFilePath = createTemporaryEnvFile(
     ".env.db",

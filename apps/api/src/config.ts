@@ -169,7 +169,7 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
     APP_ENV: "development",
     PORT: "3000",
     APP_SESSION_TTL_SECONDS: "2592000",
-    FRESHFUL_SEARCH_PATH: "/search",
+    FRESHFUL_SEARCH_PATH: "/api/v2/shop/search",
     FRESHFUL_REQUEST_TIMEOUT_MS: "10000",
     ...configuredEnvironment
   };

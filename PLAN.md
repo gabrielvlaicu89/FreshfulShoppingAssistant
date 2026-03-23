@@ -172,7 +172,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Verify the documented request samples and adapter contract are covered by unit tests or fixtures where possible, then run npm run hooks:validate.
 	Review: Required; reviewer verifies the findings are sufficient to implement catalog reads without overcommitting to unsupported cart flows.
 
-- [ ] P7-S2: Implement the cached Freshful adapter for product search and product details
+- [x] P7-S2: Implement the cached Freshful adapter for product search and product details
 	Owner: Coder
 	Depends on: P7-S1, P2-S2, P3-S1
 	Acceptance: The backend exposes a Freshful adapter that can search products, fetch product details, normalize the results, cache responses, and surface freshness metadata or fallback errors to upstream services.
@@ -253,6 +253,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
 
 
 

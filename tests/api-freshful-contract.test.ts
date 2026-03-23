@@ -4,6 +4,8 @@ import test from "node:test";
 import { freshfulProductSchema } from "@freshful/contracts";
 
 import {
+  freshfulCatalogProductDetailResultSchema,
+  freshfulCatalogSearchResultSchema,
   freshfulCatalogSearchInputSchema,
   freshfulProductReferenceSchema,
   freshfulRecordedPageObservationSchema,
@@ -11,13 +13,14 @@ import {
   freshfulSearchProductCandidateSchema
 } from "../apps/api/src/freshful/contracts.ts";
 import {
-  freshfulAdapterSearchInputFixture,
   freshfulNormalizedProductFixture,
   freshfulProductReferenceFixture,
   freshfulRecordedPageObservationFixtures,
+  freshfulRecordedSearchInputFixture,
+  freshfulRecordedSearchProductCandidateFixture,
+  freshfulRecordedSearchResponseFixture,
   freshfulRecordedProductSlug,
   freshfulRecordedRequestFixtures,
-  freshfulSearchProductCandidateFixture
 } from "../apps/api/src/freshful/fixtures.ts";
 
 test("recorded Freshful request samples match the documented search and detail route patterns", () => {
@@ -53,17 +56,49 @@ test("recorded page observations capture the current Freshful hydration boundary
 });
 
 test("adapter fixtures cover the normalized search candidate and product detail output", () => {
-  const searchInput = freshfulCatalogSearchInputSchema.parse(freshfulAdapterSearchInputFixture);
+  const searchInput = freshfulCatalogSearchInputSchema.parse(freshfulRecordedSearchInputFixture);
   const productReference = freshfulProductReferenceSchema.parse(freshfulProductReferenceFixture);
-  const searchCandidate = freshfulSearchProductCandidateSchema.parse(freshfulSearchProductCandidateFixture);
+  const searchCandidate = freshfulSearchProductCandidateSchema.parse(freshfulRecordedSearchProductCandidateFixture);
   const normalizedProduct = freshfulProductSchema.parse(freshfulNormalizedProductFixture);
+  const searchResult = freshfulCatalogSearchResultSchema.parse({
+    products: [freshfulRecordedSearchProductCandidateFixture],
+    cache: {
+      source: "network",
+      isStale: false,
+      fetchedAt: freshfulRecordedSearchProductCandidateFixture.lastSeenAt,
+      expiresAt: "2026-03-23T00:15:00.000Z"
+    }
+  });
+  const productDetailResult = freshfulCatalogProductDetailResultSchema.parse({
+    product: freshfulNormalizedProductFixture,
+    productReference: freshfulProductReferenceFixture,
+    cache: {
+      source: "cache",
+      isStale: false,
+      fetchedAt: freshfulNormalizedProductFixture.lastSeenAt,
+      expiresAt: "2026-03-23T06:00:00.000Z"
+    }
+  });
 
-  assert.equal(searchInput.query, "clatite fara gluten");
+  assert.equal(searchInput.query, "lapte");
   assert.equal(productReference.slug, freshfulRecordedProductSlug);
-  assert.equal(searchCandidate.productReference.detailUrl, productReference.detailUrl);
+  assert.equal(searchCandidate.productReference.detailUrl, "https://www.freshful.ro/p/100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l");
   assert.equal(searchCandidate.searchMetadata?.rank, 0);
-  assert.equal(searchCandidate.availability, "out_of_stock");
+  assert.equal(searchCandidate.availability, "in_stock");
+  assert.equal(searchResult.cache.source, "network");
+  assert.equal(searchResult.products[0]?.freshfulId, "100003632");
   assert.equal(normalizedProduct.freshfulId, productReference.freshfulId);
   assert.equal(normalizedProduct.currency, "RON");
   assert.equal(normalizedProduct.category, "Unknown");
+  assert.equal(productDetailResult.productReference.slug, freshfulRecordedProductSlug);
+});
+
+test("recorded Freshful shop search fixture preserves the result-carrying items payload shape", () => {
+  assert.equal(freshfulRecordedSearchResponseFixture.page, 1);
+  assert.equal(freshfulRecordedSearchResponseFixture.itemsPerPage, 30);
+  assert.equal(freshfulRecordedSearchResponseFixture.items.length, 2);
+  assert.equal(freshfulRecordedSearchResponseFixture.items[0].code, "100003632");
+  assert.equal(freshfulRecordedSearchResponseFixture.items[0].currencyCode, "RON");
+  assert.equal(freshfulRecordedSearchResponseFixture.items[0].breadcrumbs[2]?.name, "Lapte proaspat");
+  assert.equal(freshfulRecordedSearchResponseFixture.items[1].tags[0]?.text, "Fara lactoza");
 });

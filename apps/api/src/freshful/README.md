@@ -69,5 +69,8 @@ These are implementation expectations for the adapter layer, not guarantees alre
 - `FreshfulProductReference`: upstream `freshfulId` plus the recorded storefront slug and detail URL
 - `FreshfulSearchProductCandidate`: normalized shared product fields plus the `FreshfulProductReference` needed for detail hydration
 - `FreshfulCatalogAdapter`: `searchProducts(input)` and `getProductDetails(reference)`
+- `FreshfulCatalogCacheMetadata`: caller-facing freshness metadata, including stale-cache fallback reason when Freshful is unavailable
+
+The runtime P7-S2 adapter returns result envelopes instead of bare arrays or products so upstream services can distinguish fresh cache hits, live network reads, and stale fallback behavior without coupling themselves to persistence details.
 
 The deliberate split between `FreshfulProduct` and `FreshfulProductReference` keeps the shared product schema stable while still carrying the slug that the storefront detail route currently requires.

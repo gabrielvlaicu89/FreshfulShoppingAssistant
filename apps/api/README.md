@@ -41,7 +41,7 @@ Required backend environment variables:
 - `GOOGLE_WEB_CLIENT_ID`: Google OAuth client ID used for backend token verification in later auth steps
 - `ANTHROPIC_API_KEY`: server-side Claude access key; never expose this to the mobile app
 - `FRESHFUL_BASE_URL`: Freshful origin used by the backend integration layer
-- `FRESHFUL_SEARCH_PATH`: relative catalogue search path used by the Freshful adapter baseline
+- `FRESHFUL_SEARCH_PATH`: relative Freshful shop search prefix used by the adapter runtime, currently `/api/v2/shop/search`
 - `FRESHFUL_REQUEST_TIMEOUT_MS`: request timeout budget for Freshful catalogue calls
 
 Secret handling rules for this workspace:
