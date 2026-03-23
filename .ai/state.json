@@ -1,13 +1,18 @@
 {
   "planningStatus": "in-progress",
-  "currentStepId": "P8-S3",
-  "lastCompletedItemId": "P8-S2",
-  "lastReviewedItemId": "P8-S2",
+  "currentStepId": "P9-S1",
+  "lastCompletedItemId": "P8-S3",
+  "lastReviewedItemId": "P8-S3",
   "lastReviewOutcome": "approved",
   "lastCommitMessage": null,
   "lastPushAttempt": null,
   "phaseCommits": [],
   "recentNotes": [
+    {
+      "timestamp": "2026-03-23T15:41:44.270Z",
+      "stepId": "P8-S3",
+      "note": "P8-S3 accepted after mobile shopping-list validation and review; apps/mobile now creates dated meal plans for shopping-list eligibility, shows grouped estimate-only shopping lists with unresolved-item visibility and Freshful web/app handoff, and gates template-only saved plans back through the planner before shopping-list generation."
+    },
     {
       "timestamp": "2026-03-23T15:05:15.808Z",
       "stepId": "P8-S2",
@@ -52,17 +57,12 @@
       "timestamp": "2026-03-22T20:44:41.410Z",
       "stepId": "P5-S3",
       "note": "P5-S3 accepted after mobile onboarding validation and review; apps/mobile now exposes an authenticated onboarding chat screen with structured profile review, explicit confirmation and revision paths, dashboard entry points for empty and existing profiles, cache-backed profile refresh, and regression coverage for loading, retry, allergy visibility, and save/revise race serialization."
-    },
-    {
-      "timestamp": "2026-03-22T20:09:58.753Z",
-      "stepId": "P5-S2",
-      "note": "P5-S2 accepted after onboarding endpoint validation and review; apps/api now exposes an authenticated onboarding chat route with transcript persistence, structured profile extraction, explicit partial/invalid handling, user-scoped transcript/profile linkage, concurrency-safe draft management, and Drizzle-backed migration metadata for the single-active-draft invariant."
     }
   ],
   "lastRun": {
-    "timestamp": "2026-03-23T15:05:15.808Z",
+    "timestamp": "2026-03-23T15:41:44.270Z",
     "agent": "orchestrator",
-    "action": "update-progress:P8-S2",
+    "action": "update-progress:P8-S3",
     "status": "done"
   }
 }

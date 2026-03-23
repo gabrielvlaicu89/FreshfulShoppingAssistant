@@ -13,8 +13,10 @@ import {
   medicalFlagsSchema,
   onboardingChatMessageSchema,
   onboardingTranscriptSchema,
+  shoppingListSchema,
   type HouseholdProfile,
-  type OnboardingTranscript
+  type OnboardingTranscript,
+  type ShoppingList
 } from "@freshful/contracts";
 import { z } from "zod";
 
@@ -99,7 +101,8 @@ const profileUpsertResponseSchema = z
 export const createPlanRequestSchema = z
   .object({
     durationDays: z.number().int().min(1).max(7),
-    mealSlots: z.array(z.enum(mealSlotValues)).min(1)
+    mealSlots: z.array(z.enum(mealSlotValues)).min(1),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, "Expected YYYY-MM-DD date format.").optional()
   })
   .strict();
 
@@ -138,6 +141,7 @@ export type PartialEditableProfile = z.infer<typeof partialEditableProfileSchema
 export type OnboardingStructuredProfile = z.infer<typeof onboardingStructuredProfileSchema>;
 export type PlanDetailResponse = z.infer<typeof planDetailResponseSchema>;
 export type PlanRevision = z.infer<typeof planRevisionSchema>;
+export type ShoppingListResponse = ShoppingList;
 
 export interface OnboardingChatResponse {
   transcript: OnboardingTranscript;
@@ -155,6 +159,8 @@ export interface ApiClient {
   createPlan(accessToken: string, input: CreatePlanRequest): Promise<CreatePlanResponse>;
   getPlan(accessToken: string, planId: string): Promise<PlanDetailResponse>;
   refinePlan(accessToken: string, planId: string, prompt: string): Promise<PlanDetailResponse>;
+  createShoppingList(accessToken: string, planId: string): Promise<ShoppingListResponse>;
+  getShoppingList(accessToken: string, shoppingListId: string): Promise<ShoppingListResponse>;
 }
 
 function createRequestUrl(baseUrl: string, pathname: string): string {
@@ -314,6 +320,32 @@ export function createApiClient(config: MobileConfig): ApiClient {
           body: JSON.stringify({ prompt })
         },
         planDetailResponseSchema
+      );
+    },
+    async createShoppingList(accessToken, planId) {
+      return requestJson(
+        config,
+        `plans/${encodeURIComponent(planId)}/shopping-list`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        },
+        shoppingListSchema
+      );
+    },
+    async getShoppingList(accessToken, shoppingListId) {
+      return requestJson(
+        config,
+        `shopping-lists/${encodeURIComponent(shoppingListId)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        },
+        shoppingListSchema
       );
     }
   };

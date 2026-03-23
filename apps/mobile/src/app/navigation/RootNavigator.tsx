@@ -6,6 +6,7 @@ import { BootstrapScreen } from "../screens/BootstrapScreen";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { PlannerPreviewScreen } from "../screens/PlannerPreviewScreen";
+import { ShoppingListScreen } from "../screens/ShoppingListScreen";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { palette } from "../theme/tokens";
 
@@ -15,6 +16,7 @@ export type RootStackParamList = {
   Dashboard: undefined;
   Onboarding: undefined;
   PlannerPreview: { planId?: string; reopenedAt?: number } | undefined;
+  ShoppingList: { planId: string; planTitle?: string; reopenedAt?: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -44,6 +46,7 @@ export function RootNavigator(): React.JSX.Element {
       {auth.status === "signed-in" ? <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: "Freshful Assistant" }} /> : null}
       {auth.status === "signed-in" ? <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ title: "Household Profile" }} /> : null}
       {auth.status === "signed-in" ? <Stack.Screen name="PlannerPreview" component={PlannerPreviewScreen} options={{ title: "Meal Planner" }} /> : null}
+      {auth.status === "signed-in" ? <Stack.Screen name="ShoppingList" component={ShoppingListScreen} options={{ title: "Shopping List" }} /> : null}
     </Stack.Navigator>
   );
 }

@@ -161,9 +161,25 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
 
       <Card>
         <AppText variant="title">Shopping lists</AppText>
-        <AppText variant="bodyMuted">The dashboard reserves a clear handoff for shopping lists while product mapping and cart handoff are still pending.</AppText>
+        <AppText variant="bodyMuted">
+          {lastSavedPlanId
+            ? "Open the latest saved plan in the planner first so the app can confirm it has calendar dates before generating a grouped Freshful shopping list."
+            : "Create or reopen a saved meal plan first so the app can generate a Freshful shopping list without attempting unsupported cart autofill."}
+        </AppText>
         <View style={styles.actionsRow}>
-          <Button label="Shopping lists soon" variant="ghost" disabled onPress={() => undefined} />
+          <Button
+            label={lastSavedPlanId ? "Open planner for shopping list" : "Generate a plan first"}
+            variant={lastSavedPlanId ? "solid" : "ghost"}
+            onPress={() =>
+              lastSavedPlanId
+                ? navigation.navigate({
+                    name: "PlannerPreview",
+                    params: { planId: lastSavedPlanId, reopenedAt: Date.now() },
+                    merge: true
+                  })
+                : navigation.navigate("PlannerPreview")
+            }
+          />
         </View>
       </Card>
 

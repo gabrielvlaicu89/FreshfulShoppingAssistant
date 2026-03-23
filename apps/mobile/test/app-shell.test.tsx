@@ -316,6 +316,68 @@ function createRefinedPlanDetailPayload(source: PlannerDetailPayload): PlannerDe
   };
 }
 
+function createShoppingListPayload(planId = "plan-template-1") {
+  return {
+    id: "shopping-list-1",
+    userId: "user-1",
+    planId,
+    createdAt: "2026-03-23T12:30:00.000Z",
+    totalEstimatedCost: 19.49,
+    status: "draft" as const,
+    items: [
+      {
+        id: "shopping-item-milk",
+        listId: "shopping-list-1",
+        ingredientName: "milk",
+        requiredQuantity: 1,
+        requiredUnit: "l",
+        freshfulProductId: "product-milk-1",
+        chosenQuantity: 1,
+        chosenUnit: "1 l",
+        estimatedPrice: 10.5,
+        category: "Dairy",
+        resolutionSource: "deterministic" as const,
+        resolutionReason: "Direct Freshful search match.",
+        status: "pending" as const,
+        matchedProduct: {
+          id: "product-milk-1",
+          freshfulId: "freshful-milk-1",
+          name: "Milk 1L",
+          price: 10.5,
+          currency: "RON" as const,
+          unit: "1 l",
+          category: "Dairy",
+          tags: ["milk"],
+          imageUrl: "https://example.com/milk.png",
+          lastSeenAt: "2026-03-23T12:20:00.000Z",
+          availability: "in_stock" as const,
+          searchMetadata: {
+            query: "milk",
+            rank: 0,
+            matchedTerm: "milk"
+          }
+        }
+      },
+      {
+        id: "shopping-item-tomatoes",
+        listId: "shopping-list-1",
+        ingredientName: "tomatoes",
+        requiredQuantity: 1000,
+        requiredUnit: "g",
+        freshfulProductId: null,
+        chosenQuantity: null,
+        chosenUnit: null,
+        estimatedPrice: null,
+        category: null,
+        resolutionSource: "unresolved" as const,
+        resolutionReason: "No safe Freshful match was found for this ingredient.",
+        status: "pending" as const,
+        matchedProduct: null
+      }
+    ]
+  };
+}
+
 describe("mobile app shell", () => {
   beforeEach(() => {
     resetAssistantShellStore();
@@ -436,6 +498,20 @@ describe("mobile app shell", () => {
           ok: true,
           status: 200,
           json: async () => currentPlanDetail
+        } as Response;
+      }
+
+      if (/\/plans\/[^/]+\/shopping-list$/u.test(url) && init?.method === "POST") {
+        expect(init?.headers).toEqual(
+          expect.objectContaining({
+            Authorization: "Bearer backend-session-token"
+          })
+        );
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => createShoppingListPayload(currentPlanDetail.template.id)
         } as Response;
       }
 
@@ -603,7 +679,7 @@ describe("mobile app shell", () => {
       expect(screen.getByText("Profile summary")).toBeTruthy();
       expect(screen.getByText("Family household · 2 children")).toBeTruthy();
       expect(screen.getByText("Plan next meals")).toBeTruthy();
-      expect(screen.getByText("Shopping lists soon")).toBeTruthy();
+      expect(screen.getByText("Generate a plan first")).toBeTruthy();
     });
 
     expect(googleConfigureMock).toHaveBeenCalledWith({
@@ -996,6 +1072,7 @@ describe("mobile app shell", () => {
     await waitFor(() => {
       expect(screen.getByText(/Latest request: 5-day draft with breakfast, lunch, dinner, snack\./i)).toBeTruthy();
       expect(screen.getByText("View last saved plan")).toBeTruthy();
+      expect(screen.getByText("Open latest shopping list")).toBeTruthy();
     });
 
     fireEvent.press(screen.getByText("View last saved plan"));
@@ -1005,6 +1082,26 @@ describe("mobile app shell", () => {
         expect.stringContaining("/plans/plan-template-1"),
         expect.objectContaining({
           method: "GET",
+          headers: expect.objectContaining({
+            Authorization: "Bearer backend-session-token"
+          })
+        })
+      );
+    });
+
+    fireEvent.press(screen.getByText("Back to dashboard"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Open latest shopping list")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Open latest shopping list"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/plans/plan-template-1/shopping-list"),
+        expect.objectContaining({
+          method: "POST",
           headers: expect.objectContaining({
             Authorization: "Bearer backend-session-token"
           })

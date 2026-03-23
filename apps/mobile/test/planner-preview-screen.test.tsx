@@ -73,20 +73,43 @@ function createPlanDetailPayload(durationDays: number, selectedSlots: Array<"bre
     }
   };
 
+  const instance = {
+    id: "plan-instance-1",
+    templateId: template.id,
+    startDate: "2026-03-23",
+    endDate: durationDays === 1 ? "2026-03-23" : durationDays === 3 ? "2026-03-25" : durationDays === 5 ? "2026-03-27" : "2026-03-29",
+    overrides: []
+  };
+
   return {
     template,
-    instance: null,
+    instance,
     revisionHistory: [
       {
         templateId: template.id,
         parentTemplateId: null,
         title: template.title,
         createdAt: "2026-03-22T12:00:00.000Z",
-        instanceId: null,
-        startDate: null,
-        endDate: null
+        instanceId: instance.id,
+        startDate: instance.startDate,
+        endDate: instance.endDate
       }
     ]
+  };
+}
+
+function createTemplateOnlyPlanDetailPayload(durationDays: number, selectedSlots: Array<"breakfast" | "lunch" | "dinner" | "snack">) {
+  const plan = createPlanDetailPayload(durationDays, selectedSlots);
+
+  return {
+    ...plan,
+    instance: null,
+    revisionHistory: plan.revisionHistory.map((revision) => ({
+      ...revision,
+      instanceId: null,
+      startDate: null,
+      endDate: null
+    }))
   };
 }
 
@@ -115,9 +138,9 @@ function createRefinedPlanDetailPayload(source: ReturnType<typeof createPlanDeta
         parentTemplateId: source.template.id,
         title: refinedTemplate.title,
         createdAt: "2026-03-22T12:20:00.000Z",
-        instanceId: null,
-        startDate: null,
-        endDate: null
+        instanceId: source.instance?.id ?? null,
+        startDate: source.instance?.startDate ?? null,
+        endDate: source.instance?.endDate ?? null
       }
     ]
   };
@@ -206,6 +229,79 @@ describe("planner preview screen", () => {
     activeQueryClients.clear();
     resetAssistantShellStore();
     jest.clearAllMocks();
+    jest.useRealTimers();
+  });
+
+  test("creates dated plans so shopping-list generation is eligible from the mobile flow", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-03-23T08:00:00.000Z"));
+
+    const createdPlan = createPlanDetailPayload(3, ["breakfast", "lunch", "dinner"]);
+    const createPlanMock = jest.fn<ApiClient["createPlan"]>().mockResolvedValue({
+      template: createdPlan.template,
+      instance: createdPlan.instance
+    });
+    const getPlanMock = jest.fn<ApiClient["getPlan"]>().mockResolvedValue(createdPlan);
+
+    jest.mocked(useAuth).mockReturnValue({
+      status: "signed-in",
+      isBusy: false,
+      session: {
+        accessToken: "backend-session-token",
+        tokenType: "Bearer",
+        expiresAt: "2026-03-23T10:00:00.000Z",
+        expiresInSeconds: 3600
+      },
+      user: {
+        id: "user-1",
+        email: "ana@example.com",
+        emailVerified: true,
+        displayName: "Ana Popescu",
+        photoUrl: null,
+        lastLoginAt: "2026-03-22T09:00:00.000Z"
+      },
+      errorMessage: null,
+      signIn: async () => undefined,
+      signOut: async () => undefined
+    });
+
+    const apiClient = {
+      createPlan: createPlanMock,
+      getPlan: getPlanMock,
+      getProfile: jest.fn(),
+      getAssistantHealth: jest.fn(),
+      refinePlan: jest.fn(),
+      sendOnboardingMessage: jest.fn(),
+      exchangeGoogleIdToken: jest.fn(),
+      updateProfile: jest.fn(),
+      createShoppingList: jest.fn(),
+      getShoppingList: jest.fn(),
+      config: {
+        appEnv: "test",
+        apiBaseUrl: "http://10.0.2.2:3000",
+        google: {
+          androidClientId: "test-android-client.apps.googleusercontent.com",
+          webClientId: "test-web-client.apps.googleusercontent.com"
+        },
+        network: {
+          requestTimeoutMs: 12000
+        }
+      }
+    } as unknown as ApiClient;
+
+    const screen = renderScreen({ apiClient });
+
+    fireEvent.press(screen.getByText("Generate meal plan"));
+
+    await waitFor(() => {
+      expect(createPlanMock).toHaveBeenCalledWith("backend-session-token", {
+        durationDays: 3,
+        mealSlots: ["breakfast", "lunch", "dinner"],
+        startDate: "2026-03-23"
+      });
+      expect(getPlanMock).toHaveBeenCalledWith("backend-session-token", "plan-template-1");
+      expect(screen.getByText("Build shopping list")).toBeTruthy();
+      expect(screen.getByText("Shopping week of 2026-03-23")).toBeTruthy();
+    });
   });
 
   test("keeps the refined revision visible after reopening a saved plan route", async () => {
@@ -416,5 +512,76 @@ describe("planner preview screen", () => {
     expect(screen.queryByText("Current plan")).toBeNull();
     expect(screen.queryByText("3 Day Family Plan")).toBeNull();
     expect(useAssistantShellStore.getState().lastSavedPlanId).toBeNull();
+  });
+
+  test("does not expose shopping-list generation for template-only plans", async () => {
+    const templateOnlyPlan = createTemplateOnlyPlanDetailPayload(3, ["breakfast", "lunch", "dinner"]);
+    const getPlanMock = jest.fn<ApiClient["getPlan"]>().mockResolvedValue(templateOnlyPlan);
+
+    jest.mocked(useAuth).mockReturnValue({
+      status: "signed-in",
+      isBusy: false,
+      session: {
+        accessToken: "backend-session-token",
+        tokenType: "Bearer",
+        expiresAt: "2026-03-23T10:00:00.000Z",
+        expiresInSeconds: 3600
+      },
+      user: {
+        id: "user-1",
+        email: "ana@example.com",
+        emailVerified: true,
+        displayName: "Ana Popescu",
+        photoUrl: null,
+        lastLoginAt: "2026-03-22T09:00:00.000Z"
+      },
+      errorMessage: null,
+      signIn: async () => undefined,
+      signOut: async () => undefined
+    });
+
+    const apiClient = {
+      createPlan: jest.fn(),
+      getPlan: getPlanMock,
+      getProfile: jest.fn(),
+      getAssistantHealth: jest.fn(),
+      refinePlan: jest.fn(),
+      sendOnboardingMessage: jest.fn(),
+      exchangeGoogleIdToken: jest.fn(),
+      updateProfile: jest.fn(),
+      createShoppingList: jest.fn(),
+      getShoppingList: jest.fn(),
+      config: {
+        appEnv: "test",
+        apiBaseUrl: "http://10.0.2.2:3000",
+        google: {
+          androidClientId: "test-android-client.apps.googleusercontent.com",
+          webClientId: "test-web-client.apps.googleusercontent.com"
+        },
+        network: {
+          requestTimeoutMs: 12000
+        }
+      }
+    } as unknown as ApiClient;
+
+    const screen = renderScreen({
+      apiClient,
+      routeParams: {
+        planId: "plan-template-1",
+        reopenedAt: 1
+      }
+    });
+
+    await waitFor(() => {
+      expect(getPlanMock).toHaveBeenCalledWith("backend-session-token", "plan-template-1");
+      expect(screen.getByText("Shopping list unavailable")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "This saved plan is template-only. Generate a new plan from mobile to attach calendar dates before building a Freshful shopping list."
+        )
+      ).toBeTruthy();
+    });
+
+    expect(screen.queryByText("Build shopping list")).toBeNull();
   });
 });

@@ -202,7 +202,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add integration tests with mocked Freshful and Anthropic responses covering matched, ambiguous, and unresolved ingredients; run backend and root validation commands.
 	Review: Required; reviewer verifies the selection logic is explainable, resilient, and within the v1 scope.
 
-- [ ] P8-S3: Build the mobile shopping-list screen and Freshful handoff CTA
+- [x] P8-S3: Build the mobile shopping-list screen and Freshful handoff CTA
 	Owner: Coder
 	Depends on: P8-S2, P4-S3
 	Acceptance: The mobile app displays the generated shopping list grouped by category, shows quantity and estimated cost information, and offers a clear action to open Freshful web or app without attempting unsupported cart autofill.
@@ -253,6 +253,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
 
 
 

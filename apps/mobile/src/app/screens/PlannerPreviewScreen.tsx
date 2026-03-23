@@ -21,6 +21,14 @@ type LoadPlanRequest = { planId: string; source: "create" | "route" };
 
 const planDurationOptions: PlanDuration[] = [1, 3, 5, 7];
 
+function formatCalendarDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -77,6 +85,7 @@ export function PlannerPreviewScreen({ navigation, route }: Props): React.JSX.El
   const routeReloadToken = route.params?.reopenedAt ?? null;
   const hydratedRouteRequestKeyRef = React.useRef<string | null>(null);
   const userId = auth.user?.id ?? null;
+  const requestedStartDate = React.useMemo(() => formatCalendarDate(new Date()), []);
 
   const persistLastSavedPlan = React.useCallback(
     (planId: string) => {
@@ -117,7 +126,8 @@ export function PlannerPreviewScreen({ navigation, route }: Props): React.JSX.El
     mutationFn: () =>
       apiClient.createPlan(accessToken, {
         durationDays: planDays,
-        mealSlots: includedMeals
+        mealSlots: includedMeals,
+        startDate: requestedStartDate
       }),
     onMutate: () => {
       setCreateError(null);
@@ -173,6 +183,7 @@ export function PlannerPreviewScreen({ navigation, route }: Props): React.JSX.El
 
   const latestRevision = planDetail ? planDetail.revisionHistory[planDetail.revisionHistory.length - 1] : null;
   const canOpenLastSavedPlan = Boolean(lastSavedPlanId && lastSavedPlanId !== routePlanId && lastSavedPlanId !== planDetail?.template.id);
+  const shoppingListEligibleInstance = planDetail?.instance ?? null;
 
   return (
     <Screen contentContainerStyle={styles.content}>
@@ -276,6 +287,7 @@ export function PlannerPreviewScreen({ navigation, route }: Props): React.JSX.El
           <View style={styles.metadataRow}>
             <Badge label={`${planDetail.template.durationDays} day${planDetail.template.durationDays === 1 ? "" : "s"}`} tone="success" />
             <Badge label={`${planDetail.revisionHistory.length} revision${planDetail.revisionHistory.length === 1 ? "" : "s"}`} />
+            {shoppingListEligibleInstance ? <Badge label={`Shopping week of ${shoppingListEligibleInstance.startDate}`} tone="success" /> : null}
           </View>
           {latestRevision ? <AppText variant="bodyMuted">Latest saved state: {latestRevision.title}</AppText> : null}
           <View style={styles.dayStack}>
@@ -292,6 +304,32 @@ export function PlannerPreviewScreen({ navigation, route }: Props): React.JSX.El
                 </View>
               </View>
             ))}
+          </View>
+          {!shoppingListEligibleInstance ? (
+            <View style={styles.feedbackBlock}>
+              <Badge label="Shopping list unavailable" tone="warning" />
+              <AppText variant="bodyMuted">
+                This saved plan is template-only. Generate a new plan from mobile to attach calendar dates before building a Freshful shopping list.
+              </AppText>
+            </View>
+          ) : null}
+          <View style={styles.actionsRow}>
+            {shoppingListEligibleInstance ? (
+              <Button
+                label="Build shopping list"
+                onPress={() =>
+                  navigation.navigate({
+                    name: "ShoppingList",
+                    params: {
+                      planId: planDetail.template.id,
+                      planTitle: planDetail.template.title,
+                      reopenedAt: Date.now()
+                    },
+                    merge: true
+                  })
+                }
+              />
+            ) : null}
           </View>
         </Card>
       ) : null}
