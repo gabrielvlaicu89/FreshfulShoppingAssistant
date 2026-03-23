@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { freshfulProductSchema } from "@freshful/contracts";
+import { evaluateFreshfulCatalogRecency } from "../apps/api/src/index.ts";
 
 import {
   freshfulCatalogProductDetailResultSchema,
@@ -66,7 +67,12 @@ test("adapter fixtures cover the normalized search candidate and product detail 
       source: "network",
       isStale: false,
       fetchedAt: freshfulRecordedSearchProductCandidateFixture.lastSeenAt,
-      expiresAt: "2026-03-23T00:15:00.000Z"
+      expiresAt: "2026-03-23T00:15:00.000Z",
+      recency: evaluateFreshfulCatalogRecency({
+        policy: "search",
+        observedAt: freshfulRecordedSearchProductCandidateFixture.lastSeenAt,
+        now: new Date(freshfulRecordedSearchProductCandidateFixture.lastSeenAt)
+      })
     }
   });
   const productDetailResult = freshfulCatalogProductDetailResultSchema.parse({
@@ -76,7 +82,12 @@ test("adapter fixtures cover the normalized search candidate and product detail 
       source: "cache",
       isStale: false,
       fetchedAt: freshfulNormalizedProductFixture.lastSeenAt,
-      expiresAt: "2026-03-23T06:00:00.000Z"
+      expiresAt: "2026-03-23T06:00:00.000Z",
+      recency: evaluateFreshfulCatalogRecency({
+        policy: "product-detail",
+        observedAt: freshfulNormalizedProductFixture.lastSeenAt,
+        now: new Date(freshfulNormalizedProductFixture.lastSeenAt)
+      })
     }
   });
 
@@ -86,11 +97,13 @@ test("adapter fixtures cover the normalized search candidate and product detail 
   assert.equal(searchCandidate.searchMetadata?.rank, 0);
   assert.equal(searchCandidate.availability, "in_stock");
   assert.equal(searchResult.cache.source, "network");
+  assert.equal(searchResult.cache.recency.status, "fresh");
   assert.equal(searchResult.products[0]?.freshfulId, "100003632");
   assert.equal(normalizedProduct.freshfulId, productReference.freshfulId);
   assert.equal(normalizedProduct.currency, "RON");
   assert.equal(normalizedProduct.category, "Unknown");
   assert.equal(productDetailResult.productReference.slug, freshfulRecordedProductSlug);
+  assert.equal(productDetailResult.cache.recency.policy, "product-detail");
 });
 
 test("recorded Freshful shop search fixture preserves the result-carrying items payload shape", () => {

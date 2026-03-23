@@ -9,6 +9,7 @@
     "db:dev:up": "docker compose -f compose.yaml up -d",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "tsx src/db/migrate.ts",
+    "freshful:refresh": "tsx src/freshful/run-refresh.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --project tsconfig.json --pretty false --noEmit"
   },

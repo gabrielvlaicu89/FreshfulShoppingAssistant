@@ -44,6 +44,22 @@ Required backend environment variables:
 - `FRESHFUL_SEARCH_PATH`: relative Freshful shop search prefix used by the adapter runtime, currently `/api/v2/shop/search`
 - `FRESHFUL_REQUEST_TIMEOUT_MS`: request timeout budget for Freshful catalogue calls
 
+## Freshful Cache Refresh
+
+P7-S3 adds explicit recency evaluation for cached search results and product detail records:
+
+- Search cache TTL: 15 minutes
+- Product detail TTL: 6 hours
+- Stale fallback window for degraded reads: 24 hours from the last successful Freshful observation
+
+Every normalized Freshful product persists `lastSeenAt`, and search cache envelopes now expose computed recency metadata so upstream shopping-list pricing logic can distinguish fresh versus stale estimates.
+
+To refresh cached catalogue data on demand or from a scheduler:
+
+- `npm run freshful:refresh --workspace @freshful/api` refreshes stale cached searches and product details.
+- `npm run freshful:refresh --workspace @freshful/api -- --mode=all --search-limit=25 --product-limit=25` refreshes the oldest cached records regardless of freshness.
+- `npm run freshful:refresh --workspace @freshful/api -- --query=lapte --product=100003632:100003632-laptaria-cu-caimac-lapte-de-la-vaca-3-8-4-1-grasime-1l` forces an on-demand refresh for explicit targets.
+
 Secret handling rules for this workspace:
 
 - Keep live `DATABASE_URL` and `ANTHROPIC_API_KEY` values in local `.env` files or deployment secret stores only.

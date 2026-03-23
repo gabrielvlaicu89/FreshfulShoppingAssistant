@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { FreshfulProduct } from "@freshful/contracts";
 import { freshfulProductSchema } from "@freshful/contracts";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createApiDatabase } from "../db/client.js";
@@ -68,8 +68,14 @@ interface PersistedSearchCacheEntry {
   expiresAt: string;
 }
 
+export interface PersistedProductEntry {
+  product: FreshfulProduct;
+  productReference: FreshfulProductReference;
+}
+
 export interface FreshfulCatalogRepository {
   getSearchCacheByKey(cacheKey: string): Promise<PersistedSearchCacheEntry | null>;
+  listSearchCaches(options?: { limit?: number }): Promise<Array<{ input: FreshfulCatalogSearchInput; fetchedAt: string; expiresAt: string }>>;
   saveSearchResult(args: {
     cacheKey: string;
     input: FreshfulCatalogSearchInput;
@@ -82,6 +88,7 @@ export interface FreshfulCatalogRepository {
     product: FreshfulProduct;
     productReference: FreshfulProductReference;
   } | null>;
+  listProductReferences(options?: { limit?: number }): Promise<PersistedProductEntry[]>;
   saveProductDetail(args: {
     reference: FreshfulProductReference;
     product: FreshfulProduct;
@@ -403,6 +410,40 @@ export function createFreshfulCatalogRepository(
       });
     },
 
+    async listSearchCaches(options = {}) {
+      const rows = await database
+        .select({
+          query: databaseTables.cachedSearchResults.query,
+          filters: databaseTables.cachedSearchResults.filters,
+          fetchedAt: databaseTables.cachedSearchResults.fetchedAt,
+          expiresAt: databaseTables.cachedSearchResults.expiresAt
+        })
+        .from(databaseTables.cachedSearchResults)
+        .orderBy(asc(databaseTables.cachedSearchResults.fetchedAt))
+        .limit(options.limit ?? 100);
+
+      return rows.map((row) => {
+        const normalizedRow = normalizePersistedSearchCacheRecord({
+          cacheKey: row.query,
+          query: row.query,
+          filters: row.filters,
+          productIds: [],
+          products: [],
+          fetchedAt: row.fetchedAt,
+          expiresAt: row.expiresAt
+        });
+
+        return {
+          input: freshfulCatalogSearchInputSchema.parse({
+            query: normalizedRow.query,
+            ...(normalizedRow.filters ? { filters: normalizedRow.filters } : {})
+          }),
+          fetchedAt: normalizedRow.fetchedAt,
+          expiresAt: normalizedRow.expiresAt
+        };
+      });
+    },
+
     async getProductByReference(reference) {
       const [row] = await database
         .select({
@@ -441,6 +482,52 @@ export function createFreshfulCatalogRepository(
         product: toFreshfulProduct(parsedRow),
         productReference: toProductReference(parsedRow) ?? freshfulProductReferenceSchema.parse(reference)
       };
+    },
+
+    async listProductReferences(options = {}) {
+      const rows = await database
+        .select({
+          id: databaseTables.freshfulProducts.id,
+          freshfulId: databaseTables.freshfulProducts.freshfulId,
+          name: databaseTables.freshfulProducts.name,
+          price: databaseTables.freshfulProducts.price,
+          currency: databaseTables.freshfulProducts.currency,
+          unit: databaseTables.freshfulProducts.unit,
+          category: databaseTables.freshfulProducts.category,
+          tags: databaseTables.freshfulProducts.tags,
+          imageUrl: databaseTables.freshfulProducts.imageUrl,
+          slug: databaseTables.freshfulProducts.slug,
+          detailPath: databaseTables.freshfulProducts.detailPath,
+          detailUrl: databaseTables.freshfulProducts.detailUrl,
+          lastSeenAt: databaseTables.freshfulProducts.lastSeenAt,
+          availability: databaseTables.freshfulProducts.availability,
+          searchMetadata: databaseTables.freshfulProducts.searchMetadata
+        })
+        .from(databaseTables.freshfulProducts)
+        .where(
+          and(
+            isNotNull(databaseTables.freshfulProducts.slug),
+            isNotNull(databaseTables.freshfulProducts.detailPath),
+            isNotNull(databaseTables.freshfulProducts.detailUrl)
+          )
+        )
+        .orderBy(asc(databaseTables.freshfulProducts.lastSeenAt))
+        .limit(options.limit ?? 100);
+
+      return rows.map((row) => {
+        const parsedRow = normalizePersistedProductRecord(row);
+
+        return {
+          product: toFreshfulProduct(parsedRow),
+          productReference: toProductReference(parsedRow) ??
+            freshfulProductReferenceSchema.parse({
+              freshfulId: parsedRow.freshfulId,
+              slug: parsedRow.slug,
+              detailPath: parsedRow.detailPath,
+              detailUrl: parsedRow.detailUrl
+            })
+        };
+      });
     },
 
     async saveProductDetail({ reference, product }) {

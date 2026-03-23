@@ -104,9 +104,38 @@ export {
   createFreshfulCatalogRepository,
   type CreateFreshfulCatalogRepositoryOptions,
   type FreshfulCatalogRepository,
-  type FreshfulDatabase
+  type FreshfulDatabase,
+  type PersistedProductEntry
 } from "./freshful/repository.js";
-export { buildFreshfulSearchCacheKey, createFreshfulCatalogService, type CreateFreshfulCatalogServiceOptions } from "./freshful/service.js";
+export {
+  DETAIL_CACHE_TTL_MS,
+  SEARCH_CACHE_TTL_MS,
+  STALE_FALLBACK_TTL_MS,
+  evaluateFreshfulCatalogRecency,
+  freshfulCatalogRecencySchema,
+  freshfulCatalogRecencyPolicySchema,
+  freshfulCatalogRecencyStatusSchema,
+  type FreshfulCatalogRecency,
+  type FreshfulCatalogRecencyPolicy,
+  type FreshfulCatalogRecencyStatus
+} from "./freshful/policy.js";
+export {
+  createFreshfulCatalogRefreshRunner,
+  freshfulCatalogRefreshModeSchema,
+  freshfulCatalogRefreshResultSchema,
+  type CreateFreshfulCatalogRefreshRunnerOptions,
+  type FreshfulCatalogRefreshFailure,
+  type FreshfulCatalogRefreshMode,
+  type FreshfulCatalogRefreshResult,
+  type FreshfulCatalogRefreshRunOptions,
+  type FreshfulCatalogRefreshRunner
+} from "./freshful/refresh.js";
+export {
+  buildFreshfulSearchCacheKey,
+  createFreshfulCatalogService,
+  type CreateFreshfulCatalogServiceOptions,
+  type FreshfulCatalogService
+} from "./freshful/service.js";
 export { getDatabaseConfig } from "./db/config.js";
 export { databaseTables, sensitiveTableColumns } from "./db/schema.js";
 export {

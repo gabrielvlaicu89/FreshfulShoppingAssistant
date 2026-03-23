@@ -11,16 +11,19 @@ import {
   type FreshfulCatalogAdapter,
   type FreshfulCatalogProductDetailResult,
   type FreshfulCatalogSearchInput,
+  type FreshfulCatalogSearchResult,
   type FreshfulProductReference,
   type FreshfulSearchProductCandidate
 } from "./contracts.js";
 import { FreshfulCatalogNormalizationError, FreshfulCatalogUnavailableError } from "./errors.js";
+import {
+  DETAIL_CACHE_TTL_MS,
+  SEARCH_CACHE_TTL_MS,
+  evaluateFreshfulCatalogRecency,
+  freshfulCatalogRecencySchema
+} from "./policy.js";
 import type { FreshfulCatalogClient } from "./client.js";
 import type { FreshfulCatalogRepository } from "./repository.js";
-
-const SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
-const DETAIL_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const STALE_FALLBACK_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface RawFreshfulProduct {
   code?: unknown;
@@ -44,20 +47,17 @@ export interface CreateFreshfulCatalogServiceOptions {
   now?: () => Date;
 }
 
+export interface FreshfulCatalogService extends FreshfulCatalogAdapter {
+  refreshSearchProducts(input: FreshfulCatalogSearchInput): Promise<FreshfulCatalogSearchResult>;
+  refreshProductDetails(reference: FreshfulProductReference): Promise<FreshfulCatalogProductDetailResult>;
+}
+
 function hashResponse(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 function toMillis(value: string): number {
   return new Date(value).getTime();
-}
-
-function isFresh(entryTimestamp: string, ttlMs: number, now: Date): boolean {
-  return toMillis(entryTimestamp) + ttlMs > now.getTime();
-}
-
-function isWithinStaleWindow(entryTimestamp: string, now: Date): boolean {
-  return toMillis(entryTimestamp) + STALE_FALLBACK_TTL_MS > now.getTime();
 }
 
 function canonicalizeFilters(filters: FreshfulCatalogSearchInput["filters"] | undefined): string {
@@ -413,132 +413,232 @@ function normalizeDetailPayload(
       source: "network",
       isStale: false,
       fetchedAt,
-      expiresAt: new Date(toMillis(fetchedAt) + DETAIL_CACHE_TTL_MS).toISOString()
+      expiresAt: new Date(toMillis(fetchedAt) + DETAIL_CACHE_TTL_MS).toISOString(),
+      recency: evaluateFreshfulCatalogRecency({
+        policy: "product-detail",
+        observedAt: fetchedAt,
+        now: new Date(fetchedAt)
+      })
     }
   });
 }
 
-export function createFreshfulCatalogService(options: CreateFreshfulCatalogServiceOptions): FreshfulCatalogAdapter {
-  const now = options.now ?? (() => new Date());
+function buildSearchCacheMetadata(args: {
+  source: "network" | "cache" | "stale-cache";
+  fetchedAt: string;
+  now: Date;
+  fallbackReason?: string;
+}) {
+  const recency = freshfulCatalogRecencySchema.parse(
+    evaluateFreshfulCatalogRecency({
+      policy: "search",
+      observedAt: args.fetchedAt,
+      now: args.now
+    })
+  );
 
   return {
-    async searchProducts(input) {
-      const parsedInput = freshfulCatalogSearchInputSchema.parse(input);
-      const currentDate = now();
-      const cacheKey = buildFreshfulSearchCacheKey(parsedInput);
-      const cachedSearch = await options.repository.getSearchCacheByKey(cacheKey);
+    source: args.source,
+    isStale: args.source === "stale-cache",
+    fetchedAt: args.fetchedAt,
+    expiresAt: recency.freshUntil,
+    recency,
+    ...(args.fallbackReason ? { fallbackReason: args.fallbackReason } : {})
+  };
+}
 
-      if (cachedSearch && isFresh(cachedSearch.fetchedAt, SEARCH_CACHE_TTL_MS, currentDate)) {
+function buildDetailCacheMetadata(args: {
+  source: "network" | "cache" | "stale-cache";
+  observedAt: string;
+  now: Date;
+  fallbackReason?: string;
+}) {
+  const recency = freshfulCatalogRecencySchema.parse(
+    evaluateFreshfulCatalogRecency({
+      policy: "product-detail",
+      observedAt: args.observedAt,
+      now: args.now
+    })
+  );
+
+  return {
+    source: args.source,
+    isStale: args.source === "stale-cache",
+    fetchedAt: args.observedAt,
+    expiresAt: recency.freshUntil,
+    recency,
+    ...(args.fallbackReason ? { fallbackReason: args.fallbackReason } : {})
+  };
+}
+
+export function createFreshfulCatalogService(options: CreateFreshfulCatalogServiceOptions): FreshfulCatalogService {
+  const now = options.now ?? (() => new Date());
+
+  async function searchProductsInternal(
+    input: FreshfulCatalogSearchInput,
+    refreshBehavior: { forceRefresh: boolean; allowStaleFallback: boolean }
+  ): Promise<FreshfulCatalogSearchResult> {
+    const parsedInput = freshfulCatalogSearchInputSchema.parse(input);
+    const currentDate = now();
+    const cacheKey = buildFreshfulSearchCacheKey(parsedInput);
+    const cachedSearch = await options.repository.getSearchCacheByKey(cacheKey);
+    const cachedRecency = cachedSearch
+      ? evaluateFreshfulCatalogRecency({
+          policy: "search",
+          observedAt: cachedSearch.fetchedAt,
+          now: currentDate
+        })
+      : null;
+
+    if (!refreshBehavior.forceRefresh && cachedSearch && cachedRecency?.status === "fresh") {
+      return freshfulCatalogSearchResultSchema.parse({
+        products: cachedSearch.products,
+        cache: buildSearchCacheMetadata({
+          source: "cache",
+          fetchedAt: cachedSearch.fetchedAt,
+          now: currentDate
+        })
+      });
+    }
+
+    try {
+      const fetchedAt = currentDate.toISOString();
+      const rawPayload = await options.client.search(parsedInput);
+      const products = normalizeSearchPayload(rawPayload, parsedInput, fetchedAt);
+      const expiresAt = new Date(currentDate.getTime() + SEARCH_CACHE_TTL_MS).toISOString();
+
+      await options.repository.saveSearchResult({
+        cacheKey,
+        input: parsedInput,
+        products,
+        fetchedAt,
+        expiresAt,
+        responseHash: hashResponse(rawPayload)
+      });
+
+      return freshfulCatalogSearchResultSchema.parse({
+        products,
+        cache: buildSearchCacheMetadata({
+          source: "network",
+          fetchedAt,
+          now: currentDate
+        })
+      });
+    } catch (error) {
+      if (refreshBehavior.allowStaleFallback && cachedSearch && cachedRecency?.status === "stale") {
         return freshfulCatalogSearchResultSchema.parse({
           products: cachedSearch.products,
-          cache: {
-            source: "cache",
-            isStale: false,
+          cache: buildSearchCacheMetadata({
+            source: "stale-cache",
             fetchedAt: cachedSearch.fetchedAt,
-            expiresAt: cachedSearch.expiresAt
-          }
+            now: currentDate,
+            fallbackReason: error instanceof Error ? error.message : "Freshful search request failed."
+          })
         });
       }
 
-      try {
-        const fetchedAt = currentDate.toISOString();
-        const rawPayload = await options.client.search(parsedInput);
-        const products = normalizeSearchPayload(rawPayload, parsedInput, fetchedAt);
-        const expiresAt = new Date(currentDate.getTime() + SEARCH_CACHE_TTL_MS).toISOString();
-
-        await options.repository.saveSearchResult({
-          cacheKey,
-          input: parsedInput,
-          products,
-          fetchedAt,
-          expiresAt,
-          responseHash: hashResponse(rawPayload)
-        });
-
-        return freshfulCatalogSearchResultSchema.parse({
-          products,
-          cache: {
-            source: "network",
-            isStale: false,
-            fetchedAt,
-            expiresAt
-          }
-        });
-      } catch (error) {
-        if (cachedSearch && isWithinStaleWindow(cachedSearch.fetchedAt, currentDate)) {
-          return freshfulCatalogSearchResultSchema.parse({
-            products: cachedSearch.products,
-            cache: {
-              source: "stale-cache",
-              isStale: true,
-              fetchedAt: cachedSearch.fetchedAt,
-              expiresAt: cachedSearch.expiresAt,
-              fallbackReason: error instanceof Error ? error.message : "Freshful search request failed."
-            }
-          });
-        }
-
-        if (error instanceof FreshfulCatalogUnavailableError || error instanceof FreshfulCatalogNormalizationError) {
-          throw error;
-        }
-
-        throw new FreshfulCatalogUnavailableError("Freshful search failed.", { cause: error });
+      if (error instanceof FreshfulCatalogUnavailableError || error instanceof FreshfulCatalogNormalizationError) {
+        throw error;
       }
-    },
 
-    async getProductDetails(reference) {
-      const parsedReference = freshfulProductReferenceSchema.parse(reference);
-      const currentDate = now();
-      const cachedProduct = await options.repository.getProductByReference(parsedReference);
+      throw new FreshfulCatalogUnavailableError("Freshful search failed.", { cause: error });
+    }
+  }
 
-      if (cachedProduct && isFresh(cachedProduct.product.lastSeenAt, DETAIL_CACHE_TTL_MS, currentDate)) {
+  async function getProductDetailsInternal(
+    reference: FreshfulProductReference,
+    refreshBehavior: { forceRefresh: boolean; allowStaleFallback: boolean }
+  ): Promise<FreshfulCatalogProductDetailResult> {
+    const parsedReference = freshfulProductReferenceSchema.parse(reference);
+    const currentDate = now();
+    const cachedProduct = await options.repository.getProductByReference(parsedReference);
+    const cachedRecency = cachedProduct
+      ? evaluateFreshfulCatalogRecency({
+          policy: "product-detail",
+          observedAt: cachedProduct.product.lastSeenAt,
+          now: currentDate
+        })
+      : null;
+
+    if (!refreshBehavior.forceRefresh && cachedProduct && cachedRecency?.status === "fresh") {
+      return freshfulCatalogProductDetailResultSchema.parse({
+        product: cachedProduct.product,
+        productReference: cachedProduct.productReference,
+        cache: buildDetailCacheMetadata({
+          source: "cache",
+          observedAt: cachedProduct.product.lastSeenAt,
+          now: currentDate
+        })
+      });
+    }
+
+    try {
+      const fetchedAt = currentDate.toISOString();
+      const rawPayload = await options.client.getProductDetail(parsedReference);
+      const normalizedResult = normalizeDetailPayload(rawPayload, parsedReference, fetchedAt);
+      const persisted = await options.repository.saveProductDetail({
+        reference: normalizedResult.productReference,
+        product: normalizedResult.product
+      });
+
+      return freshfulCatalogProductDetailResultSchema.parse({
+        product: persisted.product,
+        productReference: persisted.productReference,
+        cache: buildDetailCacheMetadata({
+          source: "network",
+          observedAt: persisted.product.lastSeenAt,
+          now: currentDate
+        })
+      });
+    } catch (error) {
+      if (refreshBehavior.allowStaleFallback && cachedProduct && cachedRecency?.status === "stale") {
         return freshfulCatalogProductDetailResultSchema.parse({
           product: cachedProduct.product,
           productReference: cachedProduct.productReference,
-          cache: {
-            source: "cache",
-            isStale: false,
-            fetchedAt: cachedProduct.product.lastSeenAt,
-            expiresAt: new Date(toMillis(cachedProduct.product.lastSeenAt) + DETAIL_CACHE_TTL_MS).toISOString()
-          }
+          cache: buildDetailCacheMetadata({
+            source: "stale-cache",
+            observedAt: cachedProduct.product.lastSeenAt,
+            now: currentDate,
+            fallbackReason: error instanceof Error ? error.message : "Freshful product detail request failed."
+          })
         });
       }
 
-      try {
-        const fetchedAt = currentDate.toISOString();
-        const rawPayload = await options.client.getProductDetail(parsedReference);
-        const normalizedResult = normalizeDetailPayload(rawPayload, parsedReference, fetchedAt);
-        const persisted = await options.repository.saveProductDetail({
-          reference: normalizedResult.productReference,
-          product: normalizedResult.product
-        });
-
-        return freshfulCatalogProductDetailResultSchema.parse({
-          product: persisted.product,
-          productReference: persisted.productReference,
-          cache: normalizedResult.cache
-        });
-      } catch (error) {
-        if (cachedProduct && isWithinStaleWindow(cachedProduct.product.lastSeenAt, currentDate)) {
-          return freshfulCatalogProductDetailResultSchema.parse({
-            product: cachedProduct.product,
-            productReference: cachedProduct.productReference,
-            cache: {
-              source: "stale-cache",
-              isStale: true,
-              fetchedAt: cachedProduct.product.lastSeenAt,
-              expiresAt: new Date(toMillis(cachedProduct.product.lastSeenAt) + DETAIL_CACHE_TTL_MS).toISOString(),
-              fallbackReason: error instanceof Error ? error.message : "Freshful product detail request failed."
-            }
-          });
-        }
-
-        if (error instanceof FreshfulCatalogUnavailableError || error instanceof FreshfulCatalogNormalizationError) {
-          throw error;
-        }
-
-        throw new FreshfulCatalogUnavailableError("Freshful product detail lookup failed.", { cause: error });
+      if (error instanceof FreshfulCatalogUnavailableError || error instanceof FreshfulCatalogNormalizationError) {
+        throw error;
       }
+
+      throw new FreshfulCatalogUnavailableError("Freshful product detail lookup failed.", { cause: error });
+    }
+  }
+
+  return {
+    async searchProducts(input) {
+      return searchProductsInternal(input, {
+        forceRefresh: false,
+        allowStaleFallback: true
+      });
+    },
+
+    async refreshSearchProducts(input) {
+      return searchProductsInternal(input, {
+        forceRefresh: true,
+        allowStaleFallback: false
+      });
+    },
+
+    async getProductDetails(reference) {
+      return getProductDetailsInternal(reference, {
+        forceRefresh: false,
+        allowStaleFallback: true
+      });
+    },
+
+    async refreshProductDetails(reference) {
+      return getProductDetailsInternal(reference, {
+        forceRefresh: true,
+        allowStaleFallback: false
+      });
     }
   };
 }

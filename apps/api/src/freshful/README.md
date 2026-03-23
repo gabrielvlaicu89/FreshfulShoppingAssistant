@@ -59,6 +59,8 @@ These fields are sufficient to normalize a `FreshfulProduct` plus a separate `Fr
 - Every successful search or detail normalization should stamp `lastSeenAt` on the normalized product payload.
 - If Freshful is unavailable, the adapter should prefer a stale cached search or detail record up to 24 hours old and mark the caller-facing result as stale in P7-S2.
 
+P7-S3 now enforces that policy in code through shared recency evaluation helpers, refreshable service methods, and a backend refresh runner that can refresh explicit targets or sweep stale cache entries for future scheduler use.
+
 These are implementation expectations for the adapter layer, not guarantees already enforced in code.
 
 ## Normalized Adapter Contract

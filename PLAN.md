@@ -179,7 +179,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 	Tests: Add adapter unit tests plus HTTP-integration tests against recorded fixtures or mocks; run root typecheck and test commands.
 	Review: Required; reviewer verifies caching, normalization, and low-volume access expectations.
 
-- [ ] P7-S3: Add catalog refresh utilities and cache recency policy enforcement
+- [x] P7-S3: Add catalog refresh utilities and cache recency policy enforcement
 	Owner: Coder
 	Depends on: P7-S2
 	Acceptance: The backend includes a repeatable mechanism for on-demand or scheduled catalog refreshes, and product records clearly track last-seen timestamps so shopping-list estimates can declare stale prices.
@@ -253,6 +253,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
 
 
 

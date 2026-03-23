@@ -2,6 +2,8 @@ import type { FreshfulProduct } from "@freshful/contracts";
 import { freshfulSearchFiltersSchema } from "@freshful/contracts";
 import { z } from "zod";
 
+import { freshfulCatalogRecencySchema } from "./policy.js";
+
 const trimmedStringSchema = z.string().trim().min(1);
 const recordedRequestOperationValues = ["search", "product-detail"] as const;
 const recordedRequestSurfaceValues = ["html-page", "next-data"] as const;
@@ -90,6 +92,7 @@ export const freshfulCatalogCacheMetadataSchema = z
     isStale: z.boolean(),
     fetchedAt: z.string().datetime({ offset: true }),
     expiresAt: z.string().datetime({ offset: true }),
+    recency: freshfulCatalogRecencySchema,
     fallbackReason: trimmedStringSchema.optional()
   })
   .strict();
