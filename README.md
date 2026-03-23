@@ -59,7 +59,9 @@ The repository is no longer just a Copilot starter. It already contains the proj
 - `npm run env:check`: fail fast if local env files are missing.
 - `npm run lint`: run ESLint across the repository.
 - `npm run typecheck`: run TypeScript checks across all workspaces.
-- `npm test`: run the full current test suite.
+- `npm test`: run the default validation suite across shared/backend tests plus the critical mobile integration screens.
+- `npm run test:backend`: run the root `tests/*.test.ts` suite only.
+- `npm run test:mobile:critical`: run the mobile planner preview, shopping list, and app shell integration suites used by the default root validation.
 - `npm run typecheck:mobile`: run the React Native mobile workspace typecheck only.
 - `npm run test:mobile`: run the mobile Jest screen test suite.
 - `npm run android:smoke:mobile`: build the Android JS bundle for the mobile app without requiring an emulator.

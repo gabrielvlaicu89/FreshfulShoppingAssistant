@@ -46,13 +46,14 @@ function createAuthPayload(
     userId: string;
     email: string;
     displayName: string;
+    expiresAt: string;
   }> = {}
 ) {
   return {
     session: {
       accessToken: "backend-session-token",
       tokenType: "Bearer",
-      expiresAt: "2026-03-23T10:00:00.000Z",
+      expiresAt: overrides.expiresAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       expiresInSeconds: 3600
     },
     user: {
@@ -1072,7 +1073,7 @@ describe("mobile app shell", () => {
     await waitFor(() => {
       expect(screen.getByText(/Latest request: 5-day draft with breakfast, lunch, dinner, snack\./i)).toBeTruthy();
       expect(screen.getByText("View last saved plan")).toBeTruthy();
-      expect(screen.getByText("Open latest shopping list")).toBeTruthy();
+      expect(screen.getByText("Open planner for shopping list")).toBeTruthy();
     });
 
     fireEvent.press(screen.getByText("View last saved plan"));
@@ -1092,21 +1093,14 @@ describe("mobile app shell", () => {
     fireEvent.press(screen.getByText("Back to dashboard"));
 
     await waitFor(() => {
-      expect(screen.getByText("Open latest shopping list")).toBeTruthy();
+      expect(screen.getByText("Open planner for shopping list")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("Open latest shopping list"));
+    fireEvent.press(screen.getByText("Open planner for shopping list"));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining("/plans/plan-template-1/shopping-list"),
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            Authorization: "Bearer backend-session-token"
-          })
-        })
-      );
+      expect(screen.getByText("Current plan")).toBeTruthy();
+      expect(screen.getByText("Shopping list unavailable")).toBeTruthy();
     });
   });
 

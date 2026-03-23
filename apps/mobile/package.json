@@ -10,6 +10,7 @@
     "android": "react-native run-android",
     "typecheck": "tsc --project tsconfig.json --pretty false --noEmit",
     "test": "jest --config jest.config.cjs --runInBand",
+    "test:critical": "jest --config jest.config.cjs --runInBand --runTestsByPath test/planner-preview-screen.test.tsx test/shopping-list-screen.test.tsx test/app-shell.test.tsx",
     "android:smoke": "node ./scripts/android-smoke.mjs"
   },
   "dependencies": {
