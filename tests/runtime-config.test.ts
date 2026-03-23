@@ -47,9 +47,15 @@ test("getApiConfig loads validated backend settings from an env file", () => {
       "AI_MAX_TRANSCRIPT_MESSAGES=18",
       "AI_ROUTE_SONNET_MESSAGE_THRESHOLD=9",
       "AI_ROUTE_SONNET_CHAR_THRESHOLD=4200",
+      "AI_BUDGET_WINDOW_MINUTES=90",
+      "AI_BUDGET_PER_USER_USD=1.25",
+      "AI_BUDGET_GLOBAL_USD=15.5",
       "FRESHFUL_BASE_URL=https://staging.freshful.ro",
       "FRESHFUL_SEARCH_PATH=/api/catalog/search",
-      "FRESHFUL_REQUEST_TIMEOUT_MS=15000"
+      "FRESHFUL_REQUEST_TIMEOUT_MS=15000",
+      "FRESHFUL_MIN_INTERVAL_MS=400",
+      "FRESHFUL_MAX_RETRIES=3",
+      "FRESHFUL_RETRY_BASE_DELAY_MS=450"
     ].join("\n")
   );
 
@@ -84,12 +90,22 @@ test("getApiConfig loads validated backend settings from an env file", () => {
       routing: {
         sonnetTranscriptMessageThreshold: 9,
         sonnetPromptCharThreshold: 4200
+      },
+      budget: {
+        windowMs: 5_400_000,
+        perUserUsdLimit: 1.25,
+        globalUsdLimit: 15.5
       }
     },
     freshful: {
       baseUrl: "https://staging.freshful.ro",
       searchPath: "/api/catalog/search",
-      requestTimeoutMs: 15000
+      requestTimeoutMs: 15000,
+      safeguards: {
+        minIntervalMs: 400,
+        maxRetries: 3,
+        retryBaseDelayMs: 450
+      }
     }
   });
 });
@@ -190,9 +206,15 @@ test("env example files document the required backend and mobile keys", () => {
     "AI_MAX_TRANSCRIPT_MESSAGES",
     "AI_ROUTE_SONNET_MESSAGE_THRESHOLD",
     "AI_ROUTE_SONNET_CHAR_THRESHOLD",
+      "AI_BUDGET_WINDOW_MINUTES",
+      "AI_BUDGET_PER_USER_USD",
+      "AI_BUDGET_GLOBAL_USD",
     "FRESHFUL_BASE_URL",
     "FRESHFUL_SEARCH_PATH",
-    "FRESHFUL_REQUEST_TIMEOUT_MS"
+      "FRESHFUL_REQUEST_TIMEOUT_MS",
+      "FRESHFUL_MIN_INTERVAL_MS",
+      "FRESHFUL_MAX_RETRIES",
+      "FRESHFUL_RETRY_BASE_DELAY_MS"
   ]);
   assert.deepEqual(mobileEnvKeys, [
     "APP_ENV",

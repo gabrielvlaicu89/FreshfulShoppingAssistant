@@ -134,6 +134,75 @@ test("Freshful client builds search requests against the confirmed shop search e
   assert.deepEqual(requestedUrls, ["https://www.freshful.ro/api/v2/shop/search/lapte?page=1&itemsPerPage=30"]);
 });
 
+test("Freshful client retries retryable upstream failures before succeeding", async () => {
+  let calls = 0;
+  const client = createFreshfulCatalogClient({
+    config: createTestApiConfig().freshful,
+    fetchImplementation: (async () => {
+      calls += 1;
+
+      if (calls === 1) {
+        return new Response(JSON.stringify({ message: "try again" }), {
+          status: 503,
+          headers: {
+            "content-type": "application/json"
+          }
+        });
+      }
+
+      return new Response(JSON.stringify(createSearchPayload()), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+    }) as typeof fetch,
+    sleep: async () => undefined
+  });
+
+  const result = await client.search(freshfulRecordedSearchInputFixture);
+
+  assert.equal(calls, 2);
+  assert.deepEqual(result, createSearchPayload());
+});
+
+test("Freshful client enforces a minimum interval between low-level requests", async () => {
+  let currentMs = 1_000;
+  const sleeps: number[] = [];
+  const requestTimes: number[] = [];
+  const client = createFreshfulCatalogClient({
+    config: {
+      ...createTestApiConfig().freshful,
+      safeguards: {
+        minIntervalMs: 250,
+        maxRetries: 0,
+        retryBaseDelayMs: 100
+      }
+    },
+    now: () => currentMs,
+    sleep: async (delayMs) => {
+      sleeps.push(delayMs);
+      currentMs += delayMs;
+    },
+    fetchImplementation: (async () => {
+      requestTimes.push(currentMs);
+
+      return new Response(JSON.stringify(createSearchPayload()), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+    }) as typeof fetch
+  });
+
+  await client.search(freshfulRecordedSearchInputFixture);
+  await client.search(freshfulRecordedSearchInputFixture);
+
+  assert.deepEqual(sleeps, [250]);
+  assert.deepEqual(requestTimes, [1_000, 1_250]);
+});
+
 test("Freshful adapter normalizes recorded shop search results, persists per-cache candidates, and serves cache hits", async () => {
   const database = await createMigratedTestDatabase();
   let searchCalls = 0;

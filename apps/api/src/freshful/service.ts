@@ -24,6 +24,7 @@ import {
 } from "./policy.js";
 import type { FreshfulCatalogClient } from "./client.js";
 import type { FreshfulCatalogRepository } from "./repository.js";
+import { getRequestLogger } from "../request-context.js";
 
 interface RawFreshfulProduct {
   code?: unknown;
@@ -526,6 +527,15 @@ export function createFreshfulCatalogService(options: CreateFreshfulCatalogServi
       });
     } catch (error) {
       if (refreshBehavior.allowStaleFallback && cachedSearch && cachedRecency?.status === "stale") {
+        getRequestLogger({ provider: "freshful", operation: "search" })?.warn?.(
+          {
+            err: error,
+            cacheKey,
+            fallbackSource: "stale-cache",
+            observedAt: cachedSearch.fetchedAt
+          },
+          "Falling back to stale Freshful search cache after an upstream failure."
+        );
         return freshfulCatalogSearchResultSchema.parse({
           products: cachedSearch.products,
           cache: buildSearchCacheMetadata({
@@ -592,6 +602,15 @@ export function createFreshfulCatalogService(options: CreateFreshfulCatalogServi
       });
     } catch (error) {
       if (refreshBehavior.allowStaleFallback && cachedProduct && cachedRecency?.status === "stale") {
+        getRequestLogger({ provider: "freshful", operation: "product-detail" })?.warn?.(
+          {
+            err: error,
+            productId: cachedProduct.product.freshfulId,
+            fallbackSource: "stale-cache",
+            observedAt: cachedProduct.product.lastSeenAt
+          },
+          "Falling back to stale Freshful product detail cache after an upstream failure."
+        );
         return freshfulCatalogProductDetailResultSchema.parse({
           product: cachedProduct.product,
           productReference: cachedProduct.productReference,

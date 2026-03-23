@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 
 import {
   aggregateIngredientsFromPlan,
+  ClaudeUsageLimitError,
   createApiApp,
   createAppSessionIssuer,
   createAppSessionVerifier,
@@ -1670,6 +1671,196 @@ test("POST /plans/:id/shopping-list returns unresolved when the only candidate v
       }
     ]
   );
+});
+
+test("POST /plans/:id/shopping-list keeps ambiguous items unresolved when the AI tie-break hits a usage limit", async (t) => {
+  const database = await createMigratedTestDatabase();
+  const fixedNow = new Date("2026-03-23T14:30:00.000Z");
+  const user = createUser("shopping-list-ai-budget-user", fixedNow);
+  const session = await createUserSession(database.db as AuthDatabase, user, fixedNow);
+  const plan = createProductSelectionPlan(user.id);
+
+  await seedPlan(database.db, plan);
+  await seedProfile(database.db, user.id, {
+    householdType: "family",
+    numChildren: 1,
+    dietaryRestrictions: ["vegetarian"],
+    allergies: {
+      normalized: [],
+      freeText: []
+    },
+    medicalFlags: {
+      diabetes: false,
+      hypertension: false
+    },
+    goals: ["maintenance"],
+    cuisinePreferences: ["Romanian"],
+    favoriteIngredients: ["tomatoes"],
+    dislikedIngredients: [],
+    budgetBand: "medium",
+    maxPrepTimeMinutes: 30,
+    cookingSkill: "intermediate"
+  });
+
+  const freshfulService: FreshfulCatalogAdapter = {
+    async searchProducts(input) {
+      if (input.query.toLowerCase() === "tomatoes") {
+        return {
+          products: [
+            {
+              id: "product-tomato-1",
+              freshfulId: "freshful-tomato-1",
+              name: "Tomatoes 1 kg",
+              price: 12.99,
+              currency: "RON",
+              unit: "1 kg",
+              category: "Produce",
+              tags: [],
+              imageUrl: "https://cdn.example.com/tomatoes-1kg.jpg",
+              lastSeenAt: fixedNow.toISOString(),
+              availability: "in_stock",
+              searchMetadata: {
+                query: input.query,
+                rank: 0,
+                matchedTerm: "tomatoes"
+              },
+              productReference: {
+                freshfulId: "freshful-tomato-1",
+                slug: "tomatoes-1kg",
+                detailPath: "/p/tomatoes-1kg",
+                detailUrl: "https://www.freshful.ro/p/tomatoes-1kg"
+              }
+            },
+            {
+              id: "product-tomato-2",
+              freshfulId: "freshful-tomato-2",
+              name: "Diced Tomatoes 500 g",
+              price: 7.49,
+              currency: "RON",
+              unit: "500 g",
+              category: "Pantry",
+              tags: [],
+              imageUrl: "https://cdn.example.com/diced-tomatoes-500g.jpg",
+              lastSeenAt: fixedNow.toISOString(),
+              availability: "in_stock",
+              searchMetadata: {
+                query: input.query,
+                rank: 1,
+                matchedTerm: "tomatoes"
+              },
+              productReference: {
+                freshfulId: "freshful-tomato-2",
+                slug: "diced-tomatoes-500g",
+                detailPath: "/p/diced-tomatoes-500g",
+                detailUrl: "https://www.freshful.ro/p/diced-tomatoes-500g"
+              }
+            }
+          ],
+          cache: {
+            source: "network",
+            isStale: false,
+            fetchedAt: fixedNow.toISOString(),
+            expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+            recency: {
+              policy: "search",
+              status: "fresh",
+              ageMs: 0,
+              maxAgeMs: 60_000
+            }
+          }
+        };
+      }
+
+      return {
+        products: [],
+        cache: {
+          source: "network",
+          isStale: false,
+          fetchedAt: fixedNow.toISOString(),
+          expiresAt: new Date(fixedNow.getTime() + 60_000).toISOString(),
+          recency: {
+            policy: "search",
+            status: "fresh",
+            ageMs: 0,
+            maxAgeMs: 60_000
+          }
+        }
+      };
+    },
+    async getProductDetails() {
+      throw new Error("unused");
+    }
+  };
+  const aiService: ClaudeService = {
+    async createOnboardingReply() {
+      throw new Error("unused");
+    },
+    async extractProfile() {
+      throw new Error("unused");
+    },
+    async createMealPlan() {
+      throw new Error("unused");
+    },
+    async refineMealPlan() {
+      throw new Error("unused");
+    },
+    async selectShoppingProduct() {
+      throw new ClaudeUsageLimitError("AI tie-break budget exhausted.");
+    }
+  };
+
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    services: {
+      ai: {
+        name: "ai",
+        status: "ready",
+        implementation: aiService
+      }
+    },
+    auth: {
+      sessionVerifier: createFixedCurrentDateSessionVerifier(fixedNow),
+      userRepository: createAuthUserRepository(database.db as AuthDatabase, {
+        now: () => fixedNow
+      })
+    },
+    profile: {
+      repository: createTestProfileRepository(database.db, fixedNow)
+    },
+    planner: {
+      repository: createPlannerRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    shopping: {
+      repository: createShoppingListRepository(database.db, {
+        now: () => fixedNow
+      })
+    },
+    freshful: {
+      service: freshfulService
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+    await database.client.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/plans/${plan.template.id}/shopping-list`,
+    headers: {
+      authorization: `Bearer ${session.accessToken}`
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  const tomatoItem = response.json().items.find((item: { ingredientName: string }) => item.ingredientName === "tomatoes");
+
+  assert.equal(tomatoItem?.resolutionSource, "unresolved");
+  assert.match(tomatoItem?.resolutionReason ?? "", /usage budget is currently exhausted/u);
 });
 
 test("POST /plans/:id/shopping-list never invokes AI when every ambiguous candidate is filtered by hard constraints", async (t) => {

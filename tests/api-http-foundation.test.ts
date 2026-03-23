@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createApiApp } from "../apps/api/src/index.ts";
+import { createApiApp, getRequestContext } from "../apps/api/src/index.ts";
 import type { ApiConfig } from "../apps/api/src/config.ts";
 
 function createTestApiConfig(): ApiConfig {
@@ -34,12 +34,22 @@ function createTestApiConfig(): ApiConfig {
       routing: {
         sonnetTranscriptMessageThreshold: 10,
         sonnetPromptCharThreshold: 5000
+      },
+      budget: {
+        windowMs: 60 * 60 * 1000,
+        perUserUsdLimit: null,
+        globalUsdLimit: null
       }
     },
     freshful: {
       baseUrl: "https://www.freshful.ro",
       searchPath: "/search",
-      requestTimeoutMs: 10000
+      requestTimeoutMs: 10000,
+      safeguards: {
+        minIntervalMs: 250,
+        maxRetries: 2,
+        retryBaseDelayMs: 300
+      }
     }
   };
 }
@@ -107,6 +117,54 @@ test("GET /health returns the backend foundation status and service shell metada
   assert.equal(payload.services.freshful.status, "ready");
   assert.equal(typeof payload.timestamp, "string");
   assert.equal(typeof payload.uptimeSeconds, "number");
+});
+
+test("authenticated requests expose correlated request context to downstream services", async (t) => {
+  let observedContext: ReturnType<typeof getRequestContext> = null;
+  const app = createApiApp({
+    config: createTestApiConfig(),
+    logger: false,
+    profile: {
+      service: {
+        async getProfile() {
+          observedContext = getRequestContext();
+
+          return null;
+        },
+        async upsertProfile() {
+          throw new Error("unused");
+        }
+      }
+    },
+    auth: {
+      sessionVerifier: {
+        async verify() {
+          return {
+            userId: "context-user-1"
+          };
+        }
+      }
+    }
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/profile",
+    headers: {
+      authorization: "Bearer test-token"
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(typeof observedContext?.requestId, "string");
+  assert.ok((observedContext?.requestId?.length ?? 0) > 0);
+  assert.equal(observedContext?.userId, "context-user-1");
+  assert.equal(observedContext?.method, "GET");
+  assert.equal(observedContext?.url, "/profile");
 });
 
 test("createApiApp leaves the AI service pending when Anthropic config is intentionally absent", async (t) => {

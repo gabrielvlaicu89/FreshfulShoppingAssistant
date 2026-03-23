@@ -7,6 +7,7 @@ import {
   assembleMealPlanPrompt,
   assembleProfileExtractionPrompt,
   assembleShoppingProductSelectionPrompt,
+  createAiUsageMeter,
   ClaudeUpstreamError,
   ClaudeUsageLimitError,
   assembleOnboardingReplyPrompt,
@@ -14,6 +15,7 @@ import {
   createClaudeService,
   partialProfileWriteSchema,
   parseStructuredResponse,
+  runWithRequestContext,
   selectClaudeModel,
   type ApiConfig,
   type ClaudeClient
@@ -50,6 +52,11 @@ function createTestApiConfig(): ApiConfig {
       routing: {
         sonnetTranscriptMessageThreshold: 4,
         sonnetPromptCharThreshold: 1200
+      },
+      budget: {
+        windowMs: 60 * 60 * 1000,
+        perUserUsdLimit: null,
+        globalUsdLimit: null
       }
     },
     freshful: {
@@ -95,6 +102,21 @@ function createTranscript(): OnboardingChatMessage[] {
       createdAt: "2026-03-22T10:00:15.000Z"
     }
   ];
+}
+
+function createDeferred() {
+  let resolve: () => void;
+  let reject: (reason?: unknown) => void;
+  const promise = new Promise<void>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return {
+    promise,
+    resolve: resolve!,
+    reject: reject!
+  };
 }
 
 test("assembleOnboardingReplyPrompt trims the transcript and includes the onboarding field checklist", () => {
@@ -239,6 +261,257 @@ test("createClaudeService parses shopping product selections and routes larger t
   assert.equal(result.selectedProductId, "product-2");
   assert.equal(result.parseFailureReason, null);
   assert.equal(result.usage.modelTier, "sonnet");
+});
+
+test("createClaudeService enforces the configured per-user Anthropic budget window", async () => {
+  let calls = 0;
+  const config = createAnthropicTestConfig();
+  const service = createClaudeService({
+    config: {
+      ...config,
+      budget: {
+        windowMs: 60 * 60 * 1000,
+        perUserUsdLimit: 0.0004,
+        globalUsdLimit: null
+      }
+    },
+    client: {
+      async createMessage(request) {
+        calls += 1;
+
+        return {
+          id: `msg-budget-${calls}`,
+          model: request.model,
+          text: "Budget test reply",
+          stopReason: "end_turn",
+          usage: {
+            inputTokens: 100,
+            outputTokens: 100
+          }
+        };
+      }
+    }
+  });
+
+  await runWithRequestContext(
+    {
+      requestId: "req-budget-1",
+      userId: "user-budget-1"
+    },
+    async () => {
+      await service.createOnboardingReply({
+        transcript: createTranscript().slice(-2)
+      });
+    }
+  );
+
+  await assert.rejects(
+    () =>
+      runWithRequestContext(
+        {
+          requestId: "req-budget-2",
+          userId: "user-budget-1"
+        },
+        async () =>
+          service.createOnboardingReply({
+            transcript: createTranscript().slice(-2)
+          })
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof ClaudeUsageLimitError);
+      assert.match((error as Error).message, /per-user budget/u);
+      return true;
+    }
+  );
+  assert.equal(calls, 1);
+});
+
+test("createClaudeService serializes concurrent Anthropic requests so per-user budgets cannot overspend", async () => {
+  let calls = 0;
+  const firstCallStarted = createDeferred();
+  const releaseFirstCall = createDeferred();
+  const config = createAnthropicTestConfig();
+  const service = createClaudeService({
+    config: {
+      ...config,
+      budget: {
+        windowMs: 60 * 60 * 1000,
+        perUserUsdLimit: 0.0004,
+        globalUsdLimit: null
+      }
+    },
+    client: {
+      async createMessage(request) {
+        calls += 1;
+
+        if (calls === 1) {
+          firstCallStarted.resolve();
+          await releaseFirstCall.promise;
+        }
+
+        return {
+          id: `msg-concurrent-user-${calls}`,
+          model: request.model,
+          text: "Budget test reply",
+          stopReason: "end_turn",
+          usage: {
+            inputTokens: 100,
+            outputTokens: 100
+          }
+        };
+      }
+    }
+  });
+
+  const firstRequest = runWithRequestContext(
+    {
+      requestId: "req-concurrent-user-1",
+      userId: "user-budget-serial"
+    },
+    async () =>
+      service.createOnboardingReply({
+        transcript: createTranscript().slice(-2)
+      })
+  );
+
+  await firstCallStarted.promise;
+
+  const secondRequest = runWithRequestContext(
+    {
+      requestId: "req-concurrent-user-2",
+      userId: "user-budget-serial"
+    },
+    async () =>
+      service.createOnboardingReply({
+        transcript: createTranscript().slice(-2)
+      })
+  );
+
+  await Promise.resolve();
+  assert.equal(calls, 1);
+
+  releaseFirstCall.resolve();
+  await firstRequest;
+
+  await assert.rejects(
+    () => secondRequest,
+    (error: unknown) => {
+      assert.ok(error instanceof ClaudeUsageLimitError);
+      assert.match((error as Error).message, /per-user budget/u);
+      return true;
+    }
+  );
+  assert.equal(calls, 1);
+});
+
+test("createClaudeService serializes concurrent Anthropic requests so the global budget cannot overspend", async () => {
+  let calls = 0;
+  const firstCallStarted = createDeferred();
+  const releaseFirstCall = createDeferred();
+  const config = createAnthropicTestConfig();
+  const service = createClaudeService({
+    config: {
+      ...config,
+      budget: {
+        windowMs: 60 * 60 * 1000,
+        perUserUsdLimit: null,
+        globalUsdLimit: 0.0004
+      }
+    },
+    client: {
+      async createMessage(request) {
+        calls += 1;
+
+        if (calls === 1) {
+          firstCallStarted.resolve();
+          await releaseFirstCall.promise;
+        }
+
+        return {
+          id: `msg-concurrent-global-${calls}`,
+          model: request.model,
+          text: "Budget test reply",
+          stopReason: "end_turn",
+          usage: {
+            inputTokens: 100,
+            outputTokens: 100
+          }
+        };
+      }
+    }
+  });
+
+  const firstRequest = runWithRequestContext(
+    {
+      requestId: "req-concurrent-global-1",
+      userId: "user-budget-global-a"
+    },
+    async () =>
+      service.createOnboardingReply({
+        transcript: createTranscript().slice(-2)
+      })
+  );
+
+  await firstCallStarted.promise;
+
+  const secondRequest = runWithRequestContext(
+    {
+      requestId: "req-concurrent-global-2",
+      userId: "user-budget-global-b"
+    },
+    async () =>
+      service.createOnboardingReply({
+        transcript: createTranscript().slice(-2)
+      })
+  );
+
+  await Promise.resolve();
+  assert.equal(calls, 1);
+
+  releaseFirstCall.resolve();
+  await firstRequest;
+
+  await assert.rejects(
+    () => secondRequest,
+    (error: unknown) => {
+      assert.ok(error instanceof ClaudeUsageLimitError);
+      assert.match((error as Error).message, /global budget/u);
+      return true;
+    }
+  );
+  assert.equal(calls, 1);
+});
+
+test("createAiUsageMeter enforces the configured global Anthropic budget window across users", () => {
+  const meter = createAiUsageMeter({
+    budget: {
+      windowMs: 60 * 60 * 1000,
+      perUserUsdLimit: null,
+      globalUsdLimit: 0.0003
+    }
+  });
+
+  meter.recordUsage({
+    userId: "user-a",
+    operation: "meal-plan-generation",
+    model: "claude-3-5-haiku-latest",
+    modelTier: "haiku",
+    inputTokens: 80,
+    outputTokens: 80
+  });
+
+  assert.throws(
+    () =>
+      meter.assertWithinBudget({
+        userId: "user-b",
+        operation: "shopping-product-selection"
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ClaudeUsageLimitError);
+      assert.match((error as Error).message, /global budget/u);
+      return true;
+    }
+  );
 });
 
 test("assembleShoppingProductSelectionPrompt includes ingredient, profile, and candidate constraints", () => {

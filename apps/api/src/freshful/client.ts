@@ -1,4 +1,5 @@
 import type { ApiConfig } from "../config.js";
+import { getRequestLogger } from "../request-context.js";
 import type { FreshfulCatalogSearchInput, FreshfulProductReference } from "./contracts.js";
 import { FreshfulCatalogUnavailableError } from "./errors.js";
 
@@ -10,6 +11,8 @@ export interface FreshfulCatalogClient {
 export interface CreateFreshfulCatalogClientOptions {
   config: ApiConfig["freshful"];
   fetchImplementation?: typeof fetch;
+  now?: () => number;
+  sleep?: (delayMs: number) => Promise<void>;
 }
 
 const DEFAULT_SEARCH_PAGE = 1;
@@ -42,7 +45,10 @@ async function fetchCatalogSurface(
     });
 
     if (!response.ok) {
-      throw new FreshfulCatalogUnavailableError(`Freshful request failed with status ${response.status}.`);
+      throw new FreshfulCatalogUnavailableError(`Freshful request failed with status ${response.status}.`, {
+        statusCode: response.status,
+        retryable: response.status === 429 || response.status >= 500
+      });
     }
 
     const contentType = response.headers.get("content-type") ?? "";
@@ -52,7 +58,10 @@ async function fetchCatalogSurface(
       try {
         return JSON.parse(bodyText) as unknown;
       } catch (error) {
-        throw new FreshfulCatalogUnavailableError("Freshful returned invalid JSON.", { cause: error });
+        throw new FreshfulCatalogUnavailableError("Freshful returned invalid JSON.", {
+          cause: error,
+          retryable: false
+        });
       }
     }
 
@@ -62,7 +71,16 @@ async function fetchCatalogSurface(
       throw error;
     }
 
-    throw new FreshfulCatalogUnavailableError("Freshful catalog request failed.", { cause: error });
+    const isAbortError = error instanceof Error && error.name === "AbortError";
+
+    throw new FreshfulCatalogUnavailableError(
+      isAbortError ? "Freshful catalog request timed out." : "Freshful catalog request failed.",
+      {
+        cause: error,
+        statusCode: isAbortError ? 504 : undefined,
+        retryable: true
+      }
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -70,20 +88,95 @@ async function fetchCatalogSurface(
 
 export function createFreshfulCatalogClient(options: CreateFreshfulCatalogClientOptions): FreshfulCatalogClient {
   const fetchImplementation = options.fetchImplementation ?? globalThis.fetch;
+  const now = options.now ?? Date.now;
+  const sleep = options.sleep ?? ((delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs)));
+  const safeguards = {
+    minIntervalMs: options.config.safeguards?.minIntervalMs ?? 250,
+    maxRetries: options.config.safeguards?.maxRetries ?? 2,
+    retryBaseDelayMs: options.config.safeguards?.retryBaseDelayMs ?? 300
+  };
+  let nextPermittedRequestAtMs = 0;
+  let activeRequestChain = Promise.resolve();
 
   if (typeof fetchImplementation !== "function") {
     throw new Error("Global fetch is unavailable. Provide fetchImplementation to createFreshfulCatalogClient().");
   }
 
+  async function waitForTurn(operation: "search" | "product-detail", targetUrl: URL) {
+    const previousRequest = activeRequestChain;
+    let releaseCurrentRequest: (() => void) | undefined;
+
+    activeRequestChain = new Promise<void>((resolve) => {
+      releaseCurrentRequest = resolve;
+    });
+
+    await previousRequest;
+
+    const waitMs = Math.max(0, nextPermittedRequestAtMs - now());
+
+    if (waitMs > 0) {
+      getRequestLogger({ provider: "freshful", operation })?.info?.(
+        {
+          targetUrl: targetUrl.toString(),
+          waitMs
+        },
+        "Throttling Freshful request to reduce burstiness."
+      );
+      await sleep(waitMs);
+    }
+
+    nextPermittedRequestAtMs = now() + safeguards.minIntervalMs;
+
+    return () => {
+      releaseCurrentRequest?.();
+    };
+  }
+
+  async function executeWithSafeguards(operation: "search" | "product-detail", url: URL): Promise<unknown> {
+    const releaseTurn = await waitForTurn(operation, url);
+
+    try {
+      for (let attempt = 0; attempt <= safeguards.maxRetries; attempt += 1) {
+        try {
+          return await fetchCatalogSurface(fetchImplementation, url, options.config.requestTimeoutMs);
+        } catch (error) {
+          const isRetryable = error instanceof FreshfulCatalogUnavailableError && error.retryable;
+
+          if (!isRetryable || attempt >= safeguards.maxRetries) {
+            throw error;
+          }
+
+          const delayMs = safeguards.retryBaseDelayMs * 2 ** attempt;
+
+          getRequestLogger({ provider: "freshful", operation })?.warn?.(
+            {
+              err: error,
+              attempt: attempt + 1,
+              delayMs,
+              targetUrl: url.toString(),
+              statusCode: error.statusCode
+            },
+            "Retrying Freshful request after a retryable upstream failure."
+          );
+          await sleep(delayMs);
+        }
+      }
+
+      throw new FreshfulCatalogUnavailableError("Freshful request retries were exhausted.");
+    } finally {
+      releaseTurn();
+    }
+  }
+
   return {
     async search(input) {
-      return fetchCatalogSurface(fetchImplementation, buildSearchUrl(options.config, input), options.config.requestTimeoutMs);
+      return executeWithSafeguards("search", buildSearchUrl(options.config, input));
     },
 
     async getProductDetail(reference) {
       const url = new URL(reference.detailPath, options.config.baseUrl);
 
-      return fetchCatalogSurface(fetchImplementation, url, options.config.requestTimeoutMs);
+      return executeWithSafeguards("product-detail", url);
     }
   };
 }

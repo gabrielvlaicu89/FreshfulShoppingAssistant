@@ -9,9 +9,14 @@ export class FreshfulCatalogError extends Error {
 }
 
 export class FreshfulCatalogUnavailableError extends FreshfulCatalogError {
-  constructor(message: string, options?: { cause?: unknown }) {
+  readonly statusCode?: number;
+  readonly retryable: boolean;
+
+  constructor(message: string, options?: { cause?: unknown; statusCode?: number; retryable?: boolean }) {
     super("freshful.catalog_unavailable", message, options);
     this.name = "FreshfulCatalogUnavailableError";
+    this.statusCode = options?.statusCode;
+    this.retryable = options?.retryable ?? Boolean(options?.statusCode === 429 || (options?.statusCode ?? 0) >= 500);
   }
 }
 

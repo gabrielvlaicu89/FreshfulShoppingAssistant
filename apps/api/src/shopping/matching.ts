@@ -1,5 +1,6 @@
 import type { HouseholdProfile, ShoppingListItemResolutionSource } from "@freshful/contracts";
 
+import { ClaudeUsageLimitError } from "../ai/errors.js";
 import type { ClaudeService } from "../ai/service.js";
 import type { FreshfulCatalogAdapter, FreshfulSearchProductCandidate } from "../freshful/contracts.js";
 import type { AggregatedShoppingIngredient } from "./aggregation.js";
@@ -545,11 +546,16 @@ export async function resolveShoppingListItems(
           })
         );
         continue;
-      } catch {
+      } catch (error) {
+        const resolutionReason =
+          error instanceof ClaudeUsageLimitError
+            ? "AI tie-break was skipped because the Anthropic usage budget is currently exhausted."
+            : "AI tie-break failed after deterministic scoring could not choose a safe match.";
+
         resolvedItems.push(
           toResolvedItem(item, null, {
             source: "unresolved",
-            reason: "AI tie-break failed after deterministic scoring could not choose a safe match."
+            reason: resolutionReason
           })
         );
         continue;

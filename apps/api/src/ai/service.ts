@@ -9,8 +9,10 @@ import {
 } from "../profile/contracts.js";
 import { generatedMealPlanSchema, type CreatePlanRequest, type GeneratedMealPlan } from "../planner/contracts.js";
 import { type AnthropicConfig } from "../config.js";
+import { getRequestContext, getRequestLogger } from "../request-context.js";
 import { type ClaudeClient, createAnthropicClient } from "./client.js";
-import { ClaudeUsageLimitError } from "./errors.js";
+import { createAiUsageMeter, type AiUsageMeter } from "./budget.js";
+import { ClaudeBudgetLimitError, ClaudeUsageLimitError } from "./errors.js";
 import { parseStructuredResponse } from "./parser.js";
 import {
   assembleMealPlanPrompt,
@@ -166,6 +168,8 @@ export interface ClaudeService {
 export interface CreateClaudeServiceOptions {
   config: AnthropicConfig;
   client?: ClaudeClient;
+  usageMeter?: AiUsageMeter;
+  now?: () => Date;
 }
 
 function enforcePromptLimit(promptChars: number, maxPromptChars: number): void {
@@ -219,127 +223,227 @@ export function createClaudeService(options: CreateClaudeServiceOptions): Claude
     maxTranscriptMessages: options.config.usage.maxTranscriptMessages,
     maxPromptChars: options.config.usage.maxPromptChars
   };
+  const usageMeter = options.usageMeter ?? createAiUsageMeter({
+    budget: options.config.budget,
+    now: options.now
+  });
+
+  async function executeClaudeRequest(args: {
+    operation: string;
+    task: ClaudeTask;
+    transcriptMessageCount: number;
+    promptChars: number;
+    system: string;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+  }) {
+    enforcePromptLimit(args.promptChars, options.config.usage.maxPromptChars);
+
+    const route = resolveModel(options.config, args.task, args.transcriptMessageCount, args.promptChars);
+    const requestContext = getRequestContext();
+    const requestLogger = getRequestLogger({
+      provider: "anthropic",
+      operation: args.operation,
+      model: route.model,
+      modelTier: route.modelTier
+    });
+
+    let execution;
+
+    try {
+      execution = await usageMeter.executeWithinBudget(
+        {
+          userId: requestContext?.userId ?? null,
+          operation: args.operation
+        },
+        async (budgetSnapshot) => {
+          requestLogger?.info?.(
+            {
+              routeReason: route.routeReason,
+              globalSpentUsd: budgetSnapshot.globalSpentUsd,
+              globalUsdLimit: budgetSnapshot.globalUsdLimit,
+              perUserSpentUsd: budgetSnapshot.perUserSpentUsd,
+              perUserUsdLimit: budgetSnapshot.perUserUsdLimit
+            },
+            "Calling Anthropic."
+          );
+
+          const response = await client.createMessage({
+            model: route.model,
+            system: args.system,
+            maxTokens: options.config.usage.maxOutputTokens,
+            messages: args.messages
+          });
+          const usage = createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage);
+
+          return {
+            result: {
+              response,
+              usage
+            },
+            usageToRecord:
+              usage.inputTokens !== null && usage.outputTokens !== null
+                ? {
+                    userId: requestContext?.userId ?? null,
+                    operation: args.operation,
+                    model: route.model,
+                    modelTier: route.modelTier,
+                    inputTokens: usage.inputTokens,
+                    outputTokens: usage.outputTokens
+                  }
+                : undefined
+          };
+        }
+      );
+    } catch (error) {
+      if (error instanceof ClaudeBudgetLimitError) {
+        requestLogger?.warn?.(
+          {
+            err: error,
+            routeReason: route.routeReason
+          },
+          "Blocked Anthropic call because the configured budget window is exhausted."
+        );
+      }
+
+      throw error;
+    }
+
+    if (execution.recordedUsage) {
+      requestLogger?.info?.(
+        {
+          inputTokens: execution.recordedUsage.inputTokens,
+          outputTokens: execution.recordedUsage.outputTokens,
+          estimatedCostUsd: execution.recordedUsage.estimatedCostUsd,
+          recordedAt: execution.recordedUsage.recordedAt,
+          routeReason: route.routeReason,
+          userId: requestContext?.userId ?? null
+        },
+        "Anthropic call completed."
+      );
+    }
+
+    return {
+      response: execution.result.response,
+      usage: execution.result.usage,
+      route
+    };
+  }
 
   return {
     async createOnboardingReply(request) {
       const prompt = assembleOnboardingReplyPrompt(request, promptLimits);
 
-      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
-
-      const route = resolveModel(options.config, "onboarding-turn", prompt.transcriptMessageCount, prompt.promptChars);
-      const response = await client.createMessage({
-        model: route.model,
+      const execution = await executeClaudeRequest({
+        operation: "onboarding-reply",
+        task: "onboarding-turn",
+        transcriptMessageCount: prompt.transcriptMessageCount,
+        promptChars: prompt.promptChars,
         system: prompt.system,
-        maxTokens: options.config.usage.maxOutputTokens,
         messages: prompt.messages
       });
 
       return {
-        assistantMessage: response.text.trim(),
-        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+        assistantMessage: execution.response.text.trim(),
+        usage: execution.usage
       };
     },
 
     async extractProfile(request) {
       const prompt = assembleProfileExtractionPrompt(request, promptLimits);
 
-      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
-
-      const route = resolveModel(options.config, "profile-structuring", prompt.transcriptMessageCount, prompt.promptChars);
-      const response = await client.createMessage({
-        model: route.model,
+      const execution = await executeClaudeRequest({
+        operation: "profile-extraction",
+        task: "profile-structuring",
+        transcriptMessageCount: prompt.transcriptMessageCount,
+        promptChars: prompt.promptChars,
         system: prompt.system,
-        maxTokens: options.config.usage.maxOutputTokens,
         messages: prompt.messages
       });
-      const parsed = parseStructuredResponse(response.text, profileExtractionEnvelopeSchema);
+      const parsed = parseStructuredResponse(execution.response.text, profileExtractionEnvelopeSchema);
 
       if (parsed.data?.status === "complete") {
         return {
           profile: parsed.data.profile,
-          rawText: response.text.trim(),
+          rawText: execution.response.text.trim(),
           missingFields: [],
           parseFailureReason: null,
-          usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+          usage: execution.usage
         };
       }
 
       if (parsed.data?.status === "incomplete") {
         return {
           profile: parsed.data.knownProfile ?? null,
-          rawText: response.text.trim(),
+          rawText: execution.response.text.trim(),
           missingFields: parsed.data.missingFields,
           parseFailureReason: "incomplete",
-          usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+          usage: execution.usage
         };
       }
 
       return {
         profile: null,
-        rawText: response.text.trim(),
+        rawText: execution.response.text.trim(),
         missingFields: [],
         parseFailureReason: parsed.failureReason,
-        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+        usage: execution.usage
       };
     },
 
     async createMealPlan(request) {
       const prompt = assembleMealPlanPrompt(request);
 
-      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
-
-      const route = resolveModel(options.config, "meal-plan-generation", prompt.transcriptMessageCount, prompt.promptChars);
-      const response = await client.createMessage({
-        model: route.model,
+      const execution = await executeClaudeRequest({
+        operation: "meal-plan-generation",
+        task: "meal-plan-generation",
+        transcriptMessageCount: prompt.transcriptMessageCount,
+        promptChars: prompt.promptChars,
         system: prompt.system,
-        maxTokens: options.config.usage.maxOutputTokens,
         messages: prompt.messages
       });
-      const parsed = parseStructuredResponse(response.text, generatedMealPlanSchema);
+      const parsed = parseStructuredResponse(execution.response.text, generatedMealPlanSchema);
 
       return {
         plan: parsed.data,
-        rawText: response.text.trim(),
+        rawText: execution.response.text.trim(),
         parseFailureReason: parsed.failureReason,
-        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+        usage: execution.usage
       };
     },
 
     async refineMealPlan(request) {
       const prompt = assembleMealPlanRefinementPrompt(request);
 
-      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
-
-      const route = resolveModel(options.config, "meal-plan-refinement", prompt.transcriptMessageCount, prompt.promptChars);
-      const response = await client.createMessage({
-        model: route.model,
+      const execution = await executeClaudeRequest({
+        operation: "meal-plan-refinement",
+        task: "meal-plan-refinement",
+        transcriptMessageCount: prompt.transcriptMessageCount,
+        promptChars: prompt.promptChars,
         system: prompt.system,
-        maxTokens: options.config.usage.maxOutputTokens,
         messages: prompt.messages
       });
-      const parsed = parseStructuredResponse(response.text, generatedMealPlanSchema);
+      const parsed = parseStructuredResponse(execution.response.text, generatedMealPlanSchema);
 
       return {
         plan: parsed.data,
-        rawText: response.text.trim(),
+        rawText: execution.response.text.trim(),
         parseFailureReason: parsed.failureReason,
-        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+        usage: execution.usage
       };
     },
 
     async selectShoppingProduct(request) {
       const prompt = assembleShoppingProductSelectionPrompt(request);
 
-      enforcePromptLimit(prompt.promptChars, options.config.usage.maxPromptChars);
-
-      const route = resolveModel(options.config, "shopping-product-selection", 0, prompt.promptChars);
-      const response = await client.createMessage({
-        model: route.model,
+      const execution = await executeClaudeRequest({
+        operation: "shopping-product-selection",
+        task: "shopping-product-selection",
+        transcriptMessageCount: 0,
+        promptChars: prompt.promptChars,
         system: prompt.system,
-        maxTokens: options.config.usage.maxOutputTokens,
         messages: prompt.messages
       });
-      const parsed = parseStructuredResponse(response.text, shoppingProductSelectionSchema);
+      const parsed = parseStructuredResponse(execution.response.text, shoppingProductSelectionSchema);
       const candidateIds = new Set(request.candidates.map((candidate) => candidate.id));
       const selectedProductId = parsed.data?.selectedProductId ?? null;
       const isValidSelection = selectedProductId === null || candidateIds.has(selectedProductId);
@@ -349,9 +453,9 @@ export function createClaudeService(options: CreateClaudeServiceOptions): Claude
         reason:
           parsed.data?.reason ??
           "Claude did not return a valid shopping product selection response.",
-        rawText: response.text.trim(),
+        rawText: execution.response.text.trim(),
         parseFailureReason: isValidSelection ? parsed.failureReason : "schema_mismatch",
-        usage: createUsageMetadata(route.modelTier, route.model, route.routeReason, response.usage)
+        usage: execution.usage
       };
     }
   };

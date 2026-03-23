@@ -211,7 +211,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 
 ## Phase P9 - Operational Hardening, Testing, and Documentation
 
-- [ ] P9-S1: Add observability, AI budget controls, and request-rate safeguards
+- [x] P9-S1: Add observability, AI budget controls, and request-rate safeguards
 	Owner: Coder
 	Depends on: P5-S1, P7-S2, P8-S2
 	Acceptance: The backend includes structured logging, request correlation, Anthropic usage metering, per-user or global budget controls, and rate limiting or backoff protections around Freshful access.
@@ -253,6 +253,7 @@ This repository currently contains the Copilot orchestration boilerplate, helper
 - P6-S1 is complete and approved; apps/api now provides an authenticated planner creation path that uses the saved household profile to generate, validate, and persist meal plan templates plus optional dated instances, with planner-specific failures for missing profile, invalid generated plans, and invalid calendar start dates.
 - P6-S2 is complete and approved; apps/api now provides authenticated planner retrieval and refinement endpoints with explicit template revision lineage, user-scoped access, Claude-backed plan revisions, preserved calendar bindings for refined revisions, and sanitized carried-forward overrides backed by registered Drizzle migration metadata and regression coverage.
 - The next actionable step is P6-S3.
+
 
 
 

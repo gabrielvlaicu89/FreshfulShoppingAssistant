@@ -23,7 +23,10 @@ const anthropicEnvironmentSchema = z
     AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(16_384),
     AI_MAX_TRANSCRIPT_MESSAGES: z.coerce.number().int().positive().max(200),
     AI_ROUTE_SONNET_MESSAGE_THRESHOLD: z.coerce.number().int().positive().max(200),
-    AI_ROUTE_SONNET_CHAR_THRESHOLD: z.coerce.number().int().positive().max(200_000)
+    AI_ROUTE_SONNET_CHAR_THRESHOLD: z.coerce.number().int().positive().max(200_000),
+    AI_BUDGET_WINDOW_MINUTES: z.coerce.number().int().positive().max(10_080),
+    AI_BUDGET_PER_USER_USD: z.coerce.number().nonnegative().max(10_000),
+    AI_BUDGET_GLOBAL_USD: z.coerce.number().nonnegative().max(10_000)
   })
   .strict();
 const anthropicEnvironmentKeys = [
@@ -37,7 +40,10 @@ const anthropicEnvironmentKeys = [
   "AI_MAX_OUTPUT_TOKENS",
   "AI_MAX_TRANSCRIPT_MESSAGES",
   "AI_ROUTE_SONNET_MESSAGE_THRESHOLD",
-  "AI_ROUTE_SONNET_CHAR_THRESHOLD"
+  "AI_ROUTE_SONNET_CHAR_THRESHOLD",
+  "AI_BUDGET_WINDOW_MINUTES",
+  "AI_BUDGET_PER_USER_USD",
+  "AI_BUDGET_GLOBAL_USD"
 ] as const;
 const apiEnvironmentSchema = z
   .object({
@@ -49,7 +55,10 @@ const apiEnvironmentSchema = z
     GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1),
     FRESHFUL_BASE_URL: z.string().trim().url(),
     FRESHFUL_SEARCH_PATH: z.string().trim().startsWith("/"),
-    FRESHFUL_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000)
+    FRESHFUL_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000),
+    FRESHFUL_MIN_INTERVAL_MS: z.coerce.number().int().nonnegative().max(60_000),
+    FRESHFUL_MAX_RETRIES: z.coerce.number().int().nonnegative().max(5),
+    FRESHFUL_RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().max(60_000)
   })
   .strict();
 
@@ -74,6 +83,11 @@ export interface AnthropicConfig {
     sonnetTranscriptMessageThreshold: number;
     sonnetPromptCharThreshold: number;
   };
+  budget?: {
+    windowMs: number;
+    perUserUsdLimit: number | null;
+    globalUsdLimit: number | null;
+  };
 }
 
 export interface ApiConfig {
@@ -93,6 +107,11 @@ export interface ApiConfig {
     baseUrl: string;
     searchPath: string;
     requestTimeoutMs: number;
+    safeguards?: {
+      minIntervalMs: number;
+      maxRetries: number;
+      retryBaseDelayMs: number;
+    };
   };
 }
 
@@ -136,7 +155,10 @@ function resolveAnthropicConfig(environment: Record<string, string | undefined>)
     AI_MAX_OUTPUT_TOKENS: environment.AI_MAX_OUTPUT_TOKENS ?? "1200",
     AI_MAX_TRANSCRIPT_MESSAGES: environment.AI_MAX_TRANSCRIPT_MESSAGES ?? "24",
     AI_ROUTE_SONNET_MESSAGE_THRESHOLD: environment.AI_ROUTE_SONNET_MESSAGE_THRESHOLD ?? "10",
-    AI_ROUTE_SONNET_CHAR_THRESHOLD: environment.AI_ROUTE_SONNET_CHAR_THRESHOLD ?? "5000"
+    AI_ROUTE_SONNET_CHAR_THRESHOLD: environment.AI_ROUTE_SONNET_CHAR_THRESHOLD ?? "5000",
+    AI_BUDGET_WINDOW_MINUTES: environment.AI_BUDGET_WINDOW_MINUTES ?? "60",
+    AI_BUDGET_PER_USER_USD: environment.AI_BUDGET_PER_USER_USD ?? "0",
+    AI_BUDGET_GLOBAL_USD: environment.AI_BUDGET_GLOBAL_USD ?? "0"
   });
 
   return {
@@ -156,6 +178,13 @@ function resolveAnthropicConfig(environment: Record<string, string | undefined>)
     routing: {
       sonnetTranscriptMessageThreshold: parsedEnvironment.AI_ROUTE_SONNET_MESSAGE_THRESHOLD,
       sonnetPromptCharThreshold: parsedEnvironment.AI_ROUTE_SONNET_CHAR_THRESHOLD
+    },
+    budget: {
+      windowMs: parsedEnvironment.AI_BUDGET_WINDOW_MINUTES * 60_000,
+      perUserUsdLimit:
+        parsedEnvironment.AI_BUDGET_PER_USER_USD > 0 ? parsedEnvironment.AI_BUDGET_PER_USER_USD : null,
+      globalUsdLimit:
+        parsedEnvironment.AI_BUDGET_GLOBAL_USD > 0 ? parsedEnvironment.AI_BUDGET_GLOBAL_USD : null
     }
   };
 }
@@ -171,6 +200,9 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
     APP_SESSION_TTL_SECONDS: "2592000",
     FRESHFUL_SEARCH_PATH: "/api/v2/shop/search",
     FRESHFUL_REQUEST_TIMEOUT_MS: "10000",
+    FRESHFUL_MIN_INTERVAL_MS: "250",
+    FRESHFUL_MAX_RETRIES: "2",
+    FRESHFUL_RETRY_BASE_DELAY_MS: "300",
     ...configuredEnvironment
   };
   const parsedEnvironment = apiEnvironmentSchema.parse({
@@ -182,7 +214,10 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
     GOOGLE_WEB_CLIENT_ID: mergedEnvironment.GOOGLE_WEB_CLIENT_ID,
     FRESHFUL_BASE_URL: mergedEnvironment.FRESHFUL_BASE_URL,
     FRESHFUL_SEARCH_PATH: mergedEnvironment.FRESHFUL_SEARCH_PATH,
-    FRESHFUL_REQUEST_TIMEOUT_MS: mergedEnvironment.FRESHFUL_REQUEST_TIMEOUT_MS
+    FRESHFUL_REQUEST_TIMEOUT_MS: mergedEnvironment.FRESHFUL_REQUEST_TIMEOUT_MS,
+    FRESHFUL_MIN_INTERVAL_MS: mergedEnvironment.FRESHFUL_MIN_INTERVAL_MS,
+    FRESHFUL_MAX_RETRIES: mergedEnvironment.FRESHFUL_MAX_RETRIES,
+    FRESHFUL_RETRY_BASE_DELAY_MS: mergedEnvironment.FRESHFUL_RETRY_BASE_DELAY_MS
   });
   const anthropicConfig = resolveAnthropicConfig(configuredEnvironment);
 
@@ -202,7 +237,12 @@ export function getApiConfig(environment: NodeJS.ProcessEnv = process.env, envFi
     freshful: {
       baseUrl: parsedEnvironment.FRESHFUL_BASE_URL,
       searchPath: parsedEnvironment.FRESHFUL_SEARCH_PATH,
-      requestTimeoutMs: parsedEnvironment.FRESHFUL_REQUEST_TIMEOUT_MS
+      requestTimeoutMs: parsedEnvironment.FRESHFUL_REQUEST_TIMEOUT_MS,
+      safeguards: {
+        minIntervalMs: parsedEnvironment.FRESHFUL_MIN_INTERVAL_MS,
+        maxRetries: parsedEnvironment.FRESHFUL_MAX_RETRIES,
+        retryBaseDelayMs: parsedEnvironment.FRESHFUL_RETRY_BASE_DELAY_MS
+      }
     }
   };
 }

@@ -26,6 +26,7 @@ import {
   createUnexpectedErrorPayload,
   isApiHttpError
 } from "./errors.js";
+import { runWithRequestContext, setRequestContextUserId } from "./request-context.js";
 import {
   apiServiceStatusValues,
   createApiServices,
@@ -134,7 +135,20 @@ declare module "fastify" {
 
   interface FastifyRequest {
     requestStartedAt?: bigint;
+    authenticatedUserId?: string;
   }
+}
+
+async function executeWithinRequestContext<T>(request: FastifyRequest, handler: () => Promise<T>): Promise<T> {
+  return runWithRequestContext(
+    {
+      requestId: request.id,
+      method: request.method,
+      url: request.url,
+      logger: request.log
+    },
+    handler
+  );
 }
 
 function parseRequestPart<TOutput>(schema: z.ZodType<TOutput>, value: unknown, requestPart: string): TOutput {
@@ -236,7 +250,12 @@ function extractBearerToken(authorizationHeader: string | string[] | undefined):
 }
 
 async function authenticateRequest(request: FastifyRequest, sessionVerifier: AppSessionVerifier): Promise<VerifiedAppSession> {
-  return sessionVerifier.verify(extractBearerToken(request.headers.authorization));
+  const session = await sessionVerifier.verify(extractBearerToken(request.headers.authorization));
+
+  request.authenticatedUserId = session.userId;
+  setRequestContextUserId(session.userId);
+
+  return session;
 }
 
 export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance {
@@ -414,6 +433,7 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
     request.log.info(
       {
         requestId: request.id,
+        userId: request.authenticatedUserId,
         method: request.method,
         url: request.url,
         statusCode: reply.statusCode,
@@ -443,83 +463,103 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
   });
 
   app.post("/auth/google", async (request) => {
-    const body = parseRequestPart(googleAuthRequestSchema, request.body, "body");
-    const authService = appContext.services.auth.implementation;
+    return executeWithinRequestContext(request, async () => {
+      const body = parseRequestPart(googleAuthRequestSchema, request.body, "body");
+      const authService = appContext.services.auth.implementation;
 
-    if (!isAuthService(authService)) {
-      throw createAuthServiceUnavailableError();
-    }
+      if (!isAuthService(authService)) {
+        throw createAuthServiceUnavailableError();
+      }
 
-    return googleAuthResponseSchema.parse(await authService.signInWithGoogle(body));
+      return googleAuthResponseSchema.parse(await authService.signInWithGoogle(body));
+    });
   });
 
   app.get("/health", async (request) => {
-    const query = parseRequestPart(healthQuerySchema, request.query, "query");
-    const detailLevel: "summary" | "full" = query.details ?? "summary";
+    return executeWithinRequestContext(request, async () => {
+      const query = parseRequestPart(healthQuerySchema, request.query, "query");
+      const detailLevel: "summary" | "full" = query.details ?? "summary";
 
-    return createHealthResponse(appContext, detailLevel);
+      return createHealthResponse(appContext, detailLevel);
+    });
   });
 
   app.get("/profile", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const profile = await profileService.getProfile(session.userId);
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const profile = await profileService.getProfile(session.userId);
 
-    return profileResponseSchema.parse({
-      profile
+      return profileResponseSchema.parse({
+        profile
+      });
     });
   });
 
   app.put("/profile", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const body = parseRequestPart(profileWriteSchema, request.body, "body");
-    const profile = await profileService.upsertProfile(session.userId, body);
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const body = parseRequestPart(profileWriteSchema, request.body, "body");
+      const profile = await profileService.upsertProfile(session.userId, body);
 
-    return profileUpsertResponseSchema.parse({
-      profile
+      return profileUpsertResponseSchema.parse({
+        profile
+      });
     });
   });
 
   app.post("/ai/onboarding-chat", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const body = parseRequestPart(onboardingChatRequestSchema, request.body, "body");
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const body = parseRequestPart(onboardingChatRequestSchema, request.body, "body");
 
-    return onboardingChatResponseSchema.parse(await onboardingService.sendMessage(session.userId, body));
+      return onboardingChatResponseSchema.parse(await onboardingService.sendMessage(session.userId, body));
+    });
   });
 
   app.post("/plans", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const body = parseRequestPart(createPlanRequestSchema, request.body, "body");
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const body = parseRequestPart(createPlanRequestSchema, request.body, "body");
 
-    return createPlanResponseSchema.parse(await plannerService.createPlan(session.userId, body));
+      return createPlanResponseSchema.parse(await plannerService.createPlan(session.userId, body));
+    });
   });
 
   app.get("/plans/:id", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const params = parseRequestPart(planParamsSchema, request.params, "params");
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const params = parseRequestPart(planParamsSchema, request.params, "params");
 
-    return planDetailResponseSchema.parse(await plannerService.getPlan(session.userId, params.id));
+      return planDetailResponseSchema.parse(await plannerService.getPlan(session.userId, params.id));
+    });
   });
 
   app.post("/plans/:id/refine", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const params = parseRequestPart(planParamsSchema, request.params, "params");
-    const body = parseRequestPart(refinePlanRequestSchema, request.body, "body");
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const params = parseRequestPart(planParamsSchema, request.params, "params");
+      const body = parseRequestPart(refinePlanRequestSchema, request.body, "body");
 
-    return planDetailResponseSchema.parse(await plannerService.refinePlan(session.userId, params.id, body));
+      return planDetailResponseSchema.parse(await plannerService.refinePlan(session.userId, params.id, body));
+    });
   });
 
   app.post("/plans/:id/shopping-list", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const params = parseRequestPart(planParamsSchema, request.params, "params");
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const params = parseRequestPart(planParamsSchema, request.params, "params");
 
-    return shoppingListResponseSchema.parse(await shoppingService.createDraftForPlan(session.userId, params.id));
+      return shoppingListResponseSchema.parse(await shoppingService.createDraftForPlan(session.userId, params.id));
+    });
   });
 
   app.get("/shopping-lists/:id", async (request) => {
-    const session = await authenticateRequest(request, appSessionVerifier);
-    const params = parseRequestPart(shoppingListParamsSchema, request.params, "params");
+    return executeWithinRequestContext(request, async () => {
+      const session = await authenticateRequest(request, appSessionVerifier);
+      const params = parseRequestPart(shoppingListParamsSchema, request.params, "params");
 
-    return shoppingListResponseSchema.parse(await shoppingService.getShoppingList(session.userId, params.id));
+      return shoppingListResponseSchema.parse(await shoppingService.getShoppingList(session.userId, params.id));
+    });
   });
 
   app.setNotFoundHandler((request, reply) => {
@@ -543,6 +583,7 @@ export function createApiApp(options: CreateApiAppOptions = {}): FastifyInstance
       {
         err: error,
         requestId: request.id,
+        userId: request.authenticatedUserId,
         code: payload.code,
         statusCode: payload.statusCode
       },

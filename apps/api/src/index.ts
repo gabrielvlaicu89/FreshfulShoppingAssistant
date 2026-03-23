@@ -3,7 +3,8 @@ import { pathToFileURL } from "node:url";
 
 export { createApiApp, startApiServer, type ApiAppContext, type CreateApiAppOptions, type StartApiServerOptions } from "./app.js";
 export { createAnthropicClient, type ClaudeClient, type ClaudeClientRequest, type ClaudeClientResponse } from "./ai/client.js";
-export { ClaudeUpstreamError, ClaudeUsageLimitError } from "./ai/errors.js";
+export { createAiUsageMeter, type AiBudgetConfig, type AiBudgetSnapshot, type AiUsageMeter, type AiUsageRecord } from "./ai/budget.js";
+export { ClaudeBudgetLimitError, ClaudeUpstreamError, ClaudeUsageLimitError } from "./ai/errors.js";
 export { parseStructuredResponse, type StructuredParseResult } from "./ai/parser.js";
 export {
   assembleMealPlanPrompt,
@@ -75,6 +76,15 @@ export { closeApiDatabase, createApiDatabase } from "./db/client.js";
 export { ApiHttpError } from "./errors.js";
 export { getApiConfig, resolveApiWorkspacePath } from "./config.js";
 export type { ApiConfig } from "./config.js";
+export {
+  getRequestContext,
+  getRequestLogger,
+  runWithRequestContext,
+  setRequestContextUserId,
+  type RequestContextLogger,
+  type RequestContextValue,
+  type RunWithRequestContextOptions
+} from "./request-context.js";
 export {
   createFreshfulCatalogClient,
   type CreateFreshfulCatalogClientOptions,
